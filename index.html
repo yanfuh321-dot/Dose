@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https://api.github.com https://api.anthropic.com; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https: http://localhost:* http://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <title>Dose</title>
@@ -2119,7 +2119,7 @@ window.KB = {
       try { d = JSON.parse(LS.get(KEYS.data) || "null"); } catch (e) { d = null; }
       try { s = JSON.parse(LS.get(KEYS.settings) || "null"); } catch (e) { s = null; }
       this.data = normalize(d);
-      this.settings = Object.assign({ apiKey: "", model: "claude-sonnet-5-5", customModel: "" }, s || {});
+      this.settings = Object.assign({ apiKey: "", model: "claude-sonnet-5-5", customModel: "", aiProvider: "claude", proxyUrl: "", proxyToken: "", qwenModel: "", qwenVisionModel: "", deepseekModel: "", deepseekVisionModel: "" }, s || {});
       this.settings.gh = Object.assign({}, defaultsGh, (s && s.gh) || {});
       return this;
     },
@@ -2445,10 +2445,74 @@ window.KB = {
     { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 – fast and low-cost" },
     { id: "custom", label: "Enter another model ID" }
   ];
-  function model() { const s = Store.settings; return s.model === "custom" ? (s.customModel || "").trim() : (s.model || MODELS[0].id); }
-  function hasKey() { return !!(Store.settings.apiKey || "").trim(); }
+  const PROVIDERS = {
+    claude: { label: "Claude (Anthropic)", short: "Claude" },
+    qwen: { label: "Qwen (Alibaba Cloud)", short: "Qwen", text: "qwen3.5-plus", vision: "qwen3-vl-plus",
+      textModels: ["qwen3.5-plus", "qwen3-max", "qwen-plus", "qwen-flash"], visionModels: ["qwen3-vl-plus", "qwen3-vl-flash", "qwen-vl-ocr"] },
+    deepseek: { label: "DeepSeek", short: "DeepSeek", text: "deepseek-v4-pro", vision: "deepseek-v4-flash-vision-exp",
+      textModels: ["deepseek-v4-pro", "deepseek-v4-flash"], visionModels: ["deepseek-v4-flash-vision-exp"] }
+  };
+  function provider() { const p = Store.settings.aiProvider; return PROVIDERS[p] ? p : "claude"; }
+  function providerName() { return PROVIDERS[provider()].label; }
+  function canReadPdf() { return provider() === "claude"; }
+  function model(vision) {
+    const s = Store.settings, p = provider();
+    if (p === "claude") return s.model === "custom" ? (s.customModel || "").trim() : (s.model || MODELS[0].id);
+    return (s[p + (vision ? "VisionModel" : "Model")] || "").trim() || PROVIDERS[p][vision ? "vision" : "text"];
+  }
+  function modelLabel() { return provider() === "claude" ? model() : PROVIDERS[provider()].short + ": " + model(); }
+  function hasKey() {
+    const s = Store.settings;
+    return provider() === "claude" ? !!(s.apiKey || "").trim() : !!((s.proxyUrl || "").trim() && (s.proxyToken || "").trim());
+  }
+  function call(opts) { return provider() === "claude" ? callClaude(opts) : callCompat(opts); }
 
-  async function call({ system, messages, maxTokens }) {
+  // ---------- Qwen / DeepSeek via your own proxy (OpenAI-compatible format) ----------
+  function toCompat(content) {
+    if (typeof content === "string") return content;
+    return content.map(b => {
+      if (b.type === "text") return { type: "text", text: b.text };
+      if (b.type === "image") return { type: "image_url", image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } };
+      throw new Error("PDF files can only be read with Claude. Take screenshots of the pages instead.");
+    });
+  }
+  async function callCompat({ system, messages, maxTokens, vision }, retried) {
+    const s = Store.settings, p = provider(), name = PROVIDERS[p].short;
+    const url = (s.proxyUrl || "").trim(), token = (s.proxyToken || "").trim();
+    if (!url || !token) throw new Error("Add your proxy address and password under Settings first.");
+    const body = { provider: p, model: model(!!vision), max_tokens: Math.min(maxTokens || 4096, 8000),
+      messages: [{ role: "system", content: system }].concat(messages.map(m => ({ role: m.role, content: toCompat(m.content) }))) };
+    if (retried) body.enable_thinking = false;
+    let res;
+    try { res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-proxy-token": token }, body: JSON.stringify(body) }); }
+    catch (e) { throw new Error("Can't reach your proxy. Check the address under Settings, and that the HTTP trigger allows GET, POST and OPTIONS without authentication."); }
+    let j = null, raw = "";
+    try { raw = await res.text(); j = JSON.parse(raw); } catch (e) { j = null; }
+    if (!res.ok) {
+      const err = (j && j.error) || {};
+      const m = String(err.message || (j && j.message) || raw.slice(0, 200) || "");
+      const code = String(err.code || (j && j.code) || "");
+      if (err.source === "proxy") throw new Error("Proxy: " + m);
+      if (!retried && /enable_thinking/i.test(m)) return callCompat({ system, messages, maxTokens, vision }, true);
+      if (res.status === 401 || /invalid_api_key|api.?key/i.test(code)) throw new Error(`${name} rejected the API key stored in your proxy. Check the environment variable in Function Compute.`);
+      if (res.status === 402 || /insufficient|balance|arrearage/i.test(m + " " + code)) throw new Error(`Your ${name} account has no credit left. Top it up in the provider's console.`);
+      if (/data_inspection|inappropriate/i.test(m + " " + code)) throw new Error(`${name}'s content filter blocked this request. Try rephrasing it.`);
+      if (res.status === 429) throw new Error("Too many requests in a short time. Wait a moment and try again.");
+      if (res.status === 404 || /model/i.test(m + " " + code)) throw new Error(`The model “${body.model}” isn't available${m ? " (" + m + ")" : ""}. Choose another one under Settings.`);
+      if (res.status === 502 || res.status === 503) throw new Error("Your proxy function failed to start or crashed. Check its logs in Function Compute, the start command (node index.js) and port 9000.");
+      if (res.status >= 500) throw new Error(`${name} or your proxy had a problem (${res.status}). Try again in a few minutes.`);
+      throw new Error("Request failed (" + res.status + ")" + (m ? ": " + m : "") + ".");
+    }
+    const ch = j && j.choices && j.choices[0];
+    let text = ch && ch.message ? ch.message.content : "";
+    if (Array.isArray(text)) text = text.map(x => x.text || "").join("");
+    text = String(text || "").trim();
+    if (!text) throw new Error(`${name} returned an empty answer. Try again or choose another model.`);
+    if (ch.finish_reason === "length") text += "\n\n_The answer was cut off because of its length._";
+    return text;
+  }
+
+  async function callClaude({ system, messages, maxTokens }) {
     const key = (Store.settings.apiKey || "").trim();
     if (!key) throw new Error("No API key yet. Add it under Settings.");
     if (!model()) throw new Error("No model selected. Choose one under Settings.");
@@ -2646,10 +2710,11 @@ Structure:
     if (m[1] === "application/pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: m[2] } };
     return { type: "image", source: { type: "base64", media_type: m[1], data: m[2] } };
   }
+  function fileBlocks(input) { return (Array.isArray(input) ? input : [input]).map(fileBlock); }
   async function readLabel(dataUrl) {
     const text = await call({
       system: "You read supplement labels and answer with valid JSON only.",
-      messages: [{ role: "user", content: [fileBlock(dataUrl), { type: "text", text: `Read the ingredient / nutrition table of this supplement. The label may be in Chinese or another language.
+      messages: [{ role: "user", content: fileBlocks(dataUrl).concat([{ type: "text", text: `Read the ingredient / nutrition table of this supplement. The label may be in Chinese or another language.
 Answer only with a JSON object, no Markdown, in this schema:
 {"brand": string|null, "product": string|null, "form": "Capsule"|"Tablet"|"Powder"|"Drops"|"Liquid"|"Gummy"|"Spray"|"Other"|null, "serving": string|null, "servingsPerDay": number|null, "ingredients": [{"name": string, "form": string|null, "amount": number, "unit": "mg"|"µg"|"g"|"IU"|"bn CFU"}]}
 Rules:
@@ -2657,15 +2722,16 @@ Rules:
 - For minerals, give the elemental amount (e.g. "of which magnesium") as amount and the compound as form (e.g. "bisglycinate").
 - Vitamin D preferably in µg. For omega-3, list EPA and DHA as separate entries.
 - Use English names (e.g. "Vitamin D3", "Magnesium", "Folic acid", "Vitamin B12").
-- Leave out % of reference intake. Leave out anything unreadable – don't guess.` }] }],
-      maxTokens: 2000
+- Several images show the same product.
+- Leave out % of reference intake. Leave out anything unreadable – don't guess.` }]) }],
+      maxTokens: 2000, vision: true
     });
     return parseJson(text, "The label couldn't be read reliably. Try a sharper photo of the ingredient table.");
   }
   async function readLabReport(dataUrl) {
     const text = await call({
       system: "You extract values from medical lab reports and answer with valid JSON only.",
-      messages: [{ role: "user", content: [fileBlock(dataUrl), { type: "text", text: `Extract all measured values from this lab report. It may be in Chinese, German or another language.
+      messages: [{ role: "user", content: fileBlocks(dataUrl).concat([{ type: "text", text: `Extract all measured values from this lab report. It may be in Chinese, German or another language.
 Answer only with a JSON object, no Markdown, in this schema:
 {"date": "YYYY-MM-DD"|null, "source": string|null, "items": [{"name": string, "value": string, "unit": string|null, "refLow": string|null, "refHigh": string|null}]}
 Rules:
@@ -2675,14 +2741,15 @@ Rules:
 - "unit" in standard Latin notation exactly as the lab used it – do not convert values. Examples: "mmol/L", "µmol/L", "g/L", "pmol/L", "nmol/L", "µg/L", "ng/mL", "mIU/L", "µIU/mL", "U/L", "mg/L", "10^9/L", "10^12/L", "fL", "pg", "%", "mmHg". Write 次/分 as "bpm".
 - Dates like 2026年8月3日 or 03.08.2026 become "2026-08-03".
 - Split the reference range into refLow and refHigh; use null for an open end (e.g. "< 5" → refLow null, refHigh "5").
-- Skip pure text comments. Don't guess unreadable values.` }] }],
-      maxTokens: 4000
+- Several images are pages of the same report – combine them.
+- Skip pure text comments. Don't guess unreadable values.` }]) }],
+      maxTokens: 4000, vision: true
     });
     return parseJson(text, "The report couldn't be read reliably. Try a sharper photo or the PDF.");
   }
-  function test() { return call({ system: "Answer with exactly one word.", messages: [{ role: "user", content: "Say 'Connected'." }], maxTokens: 20 }); }
+  function test() { return call({ system: "Answer with exactly one word.", messages: [{ role: "user", content: "Say 'Connected'." }], maxTokens: 300 }); }
 
-  window.AI = { MODELS, model, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
+  window.AI = { MODELS, PROVIDERS, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
 })();
 
 </script>
@@ -3100,7 +3167,7 @@ Rules:
       <footer class="sheet-foot">
         ${sh.isNew ? "" : `<button class="btn danger-ghost" data-action="delete-sheet">Delete</button>`}
         <span class="spacer"></span>
-        ${sh.kind === "supp" ? `<button class="btn" data-action="ai-check"${AI.hasKey() ? "" : ' disabled title="Add an API key under Settings first"'}>Check with AI</button>` : ""}
+        ${sh.kind === "supp" ? `<button class="btn" data-action="ai-check"${AI.hasKey() ? "" : ' disabled title="Set up the AI under Settings first"'}>Check with AI</button>` : ""}
         <button class="btn primary" data-action="save-sheet">Save</button>
       </footer></div></div>`;
   }
@@ -3111,7 +3178,7 @@ Rules:
     const sh = S.sheet;
     if (!AI.hasKey()) return "";
     return `<div class="scan">
-      <label class="btn scan-btn${sh.scanBusy ? " is-busy" : ""}">${ICON.camera}<span>${label}</span><input type="file" accept="${accept}" data-scan hidden${sh.scanBusy ? " disabled" : ""}></label>
+      <label class="btn scan-btn${sh.scanBusy ? " is-busy" : ""}">${ICON.camera}<span>${label}</span><input type="file" accept="${accept}" multiple data-scan hidden${sh.scanBusy ? " disabled" : ""}></label>
       <p class="hint">${hint}</p>
       ${sh.scanBusy ? `<div class="ai-busy" role="status"><span class="spinner"></span>Reading …</div>` : ""}
       ${sh.scanError ? `<p class="error">${esc(sh.scanError)}</p>` : ""}
@@ -3121,7 +3188,7 @@ Rules:
   // ----- supplement -----
   function suppBody() {
     const d = S.sheet.draft;
-    return `${scanBox("Photograph the label", "image/*", "The AI reads ingredients and amounts. Check them afterwards.")}
+    return `${scanBox("Photograph the label", "image/*", "One or more photos. The AI reads ingredients and amounts – check them afterwards.")}
       <div class="grid2">
         <label class="field"><span>Product name</span><input data-dbind="product" value="${esc(d.product)}" placeholder="e.g. Magnesium bisglycinate" autocomplete="off"></label>
         <label class="field"><span>Brand</span><input data-dbind="brand" value="${esc(d.brand)}" placeholder="Manufacturer" autocomplete="off"></label>
@@ -3205,7 +3272,7 @@ Rules:
     if (sh.aiBusy) return `<div class="ai-busy" role="status"><span class="spinner"></span>The AI is checking this supplement … usually 20–40 seconds.</div>`;
     if (sh.aiError) return `<p class="error">${esc(sh.aiError)}</p>`;
     if (sh.ai) return `<h3>AI assessment</h3><div class="md">${Markdown.render(sh.ai)}</div><p class="hint">Also saved under Advisor → Reports.</p>`;
-    return AI.hasKey() ? "" : `<p class="hint">With an API key (Settings) the AI also assesses this supplement – including the dose for your purpose and your results.</p>`;
+    return AI.hasKey() ? "" : `<p class="hint">Once the AI is set up (Settings), it also assesses this supplement – including the dose for your purpose and your results.</p>`;
   }
 
   // ----- lab report -----
@@ -3278,7 +3345,7 @@ Rules:
   }
   function panelBody() {
     const d = S.sheet.draft;
-    return `${scanBox("Scan lab report", "image/*,application/pdf", "Photo or PDF. The AI reads date, values, units and reference ranges – check them afterwards.")}
+    return `${scanBox("Scan lab report", AI.canReadPdf() ? "image/*,application/pdf" : "image/*", (AI.canReadPdf() ? "Photos or a PDF" : "Photos or screenshots") + " – you can select several pages at once. The AI reads date, values, units and reference ranges; check them afterwards.")}
       <div class="grid2">
         <label class="field"><span>Date of the blood test</span><input type="date" data-dbind="date" value="${esc(d.date)}"></label>
         <label class="field"><span>Lab or practice</span><input data-dbind="source" value="${esc(d.source)}" placeholder="optional" autocomplete="off"></label>
@@ -3390,7 +3457,7 @@ Rules:
     render();
   }
   function addReport(r) {
-    const rep = Object.assign({ id: Store.uid(), date: new Date().toISOString(), model: AI.model() }, r);
+    const rep = Object.assign({ id: Store.uid(), date: new Date().toISOString(), model: AI.modelLabel() }, r);
     Store.data.reports.unshift(rep);
     Store.data.reports = Store.data.reports.slice(0, 40);
     Store.save();
@@ -3454,15 +3521,19 @@ Rules:
     const kept = d.items.filter(i => String(i.name || "").trim());
     if (items.length) d.items = kept.concat(items);
   }
-  async function scanFile(file) {
+  async function scanFiles(files) {
     const sh = S.sheet;
-    if (!file || !sh) return;
+    if (!files.length || !sh) return;
     sh.scanBusy = true; sh.scanError = null;
     rerenderBody();
     try {
-      const url = await fileToDataUrl(file, sh.kind === "panel" ? 2200 : 1600);
-      if (sh.kind === "panel") { const r = await AI.readLabReport(url); if (S.sheet !== sh) return; applyReport(r); toast(`${(r.items || []).length} values read – please check them`); }
-      else { const r = await AI.readLabel(url); if (S.sheet !== sh) return; applyLabel(r); toast("Label read – please check the values"); }
+      const list = files.slice(0, 6);
+      if (!AI.canReadPdf() && list.some(f => f.type === "application/pdf")) throw new Error(`PDF files can only be read with Claude. With ${AI.providerName()}, take screenshots of the pages and select them together.`);
+      const urls = [];
+      for (const f of list) urls.push(await fileToDataUrl(f, sh.kind === "panel" ? 2200 : 1600));
+      const more = files.length > 6 ? " Only the first 6 images were read." : "";
+      if (sh.kind === "panel") { const r = await AI.readLabReport(urls); if (S.sheet !== sh) return; applyReport(r); toast(`${(r.items || []).length} values read – please check them.${more}`); }
+      else { const r = await AI.readLabel(urls); if (S.sheet !== sh) return; applyLabel(r); toast("Label read – please check the values." + more); }
     } catch (e) { sh.scanError = e.message; }
     finally { sh.scanBusy = false; if (S.sheet === sh) rerenderBody(); }
   }
@@ -3545,7 +3616,7 @@ Rules:
     const has = AI.hasKey(), off = has && !S.busy ? "" : " disabled";
     const quick = ["I have trouble falling asleep", "I'm often tired", "I feel stressed", "I get sick often", "I want to build muscle", "My hair is thinning"];
     return `<header class="page-head"><div><h1>Advisor</h1><p class="lead">The AI knows your profile, supplements, results and the outcome of the rule check.</p></div></header>
-      ${has ? "" : `<div class="notice"><p><strong>No API key yet.</strong> The advisor uses the Claude API with your own key – setup takes a few minutes.</p><a class="btn primary" href="#settings">Go to Settings</a></div>`}
+      ${has ? "" : `<div class="notice"><p><strong>The AI isn't set up yet.</strong> Choose Claude, Qwen or DeepSeek under Settings – setup takes a few minutes.</p><a class="btn primary" href="#settings">Go to Settings</a></div>`}
       <section class="block ask"><h2>What would you like to work on?</h2>
         <label class="sr-only" for="ask-text">Your concern</label>
         <textarea id="ask-text" rows="4" placeholder="e.g. I have trouble falling asleep and feel tired in the afternoon. What can I do?">${esc(S.askDraft)}</textarea>
@@ -3560,7 +3631,7 @@ Rules:
       </div>
       <div id="ai-status">${aiStatus()}</div>
       <section class="block"><h2>Reports</h2>${Store.data.reports.length ? `<div class="reports">${Store.data.reports.map(reportItem).join("")}</div>` : `<p class="muted">No reports yet. Ask a question above or let the AI review your results.</p>`}</section>
-      <p class="privacy small">For reports, your profile, supplements and results are sent to Anthropic's Claude API – only when you press one of the buttons.</p>`;
+      <p class="privacy small">For reports, your profile, supplements and results are sent to ${esc(AI.providerName())}${AI.provider() === "claude" ? "" : " via your proxy"} – only when you press one of the buttons.</p>`;
   }
   function aiStatus() {
     if (S.busy) return `<div class="ai-busy" role="status"><span class="spinner"></span>${esc(S.busy)} … usually 20–60 seconds.</div>`;
@@ -3617,10 +3688,25 @@ Rules:
     const s = Store.settings, g = s.gh, st = Sync.status;
     return `<header class="page-head"><div><h1>Settings</h1></div></header>
       <section class="block form-block"><h2>AI advisor</h2>
-        <p class="hint">The advisor uses the Claude API with your own key. It's stored only on this device and is not synced.</p>
+        <label class="field"><span>Provider</span><select data-sbind="aiProvider">${opt("claude", "Claude – Anthropic API", AI.provider())}${opt("qwen", "Qwen – Alibaba Cloud, via your proxy", AI.provider())}${opt("deepseek", "DeepSeek – via your proxy", AI.provider())}</select></label>
+        ${AI.provider() === "claude" ? `
+        <p class="hint">Uses the Claude API with your own key. It's stored only on this device and is not synced.</p>
         <label class="field"><span>API key</span><input type="password" data-sbind="apiKey" value="${esc(s.apiKey)}" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
         <label class="field"><span>Model</span><select data-sbind="model">${AI.MODELS.map(m => opt(m.id, m.label, s.model)).join("")}</select></label>
-        ${s.model === "custom" ? `<label class="field"><span>Model ID</span><input data-sbind="customModel" value="${esc(s.customModel)}" placeholder="e.g. claude-sonnet-5-5" spellcheck="false" autocapitalize="off"></label>` : ""}
+        ${s.model === "custom" ? `<label class="field"><span>Model ID</span><input data-sbind="customModel" value="${esc(s.customModel)}" placeholder="e.g. claude-sonnet-5-5" spellcheck="false" autocapitalize="off"></label>` : ""}` : (() => {
+          const p = AI.provider(), P = AI.PROVIDERS[p];
+          return `
+        <p class="hint">${esc(P.short)} doesn't accept requests straight from a browser, so Dose talks to a small proxy function in your Alibaba Cloud account that holds the API keys. One proxy serves both Qwen and DeepSeek – the setup guide is in PROXY.md. Address and password are stored only on this device.</p>
+        <label class="field"><span>Proxy address</span><input data-sbind="proxyUrl" value="${esc(s.proxyUrl)}" placeholder="https://dose-proxy-….cn-shanghai.fcapp.run" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url"></label>
+        <label class="field"><span>Proxy password</span><input type="password" data-sbind="proxyToken" value="${esc(s.proxyToken)}" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <div class="grid2">
+          <label class="field"><span>Model for advice</span><input list="dl-text-${p}" data-sbind="${p}Model" value="${esc(s[p + "Model"])}" placeholder="${esc(P.text)}" spellcheck="false" autocapitalize="off"></label>
+          <label class="field"><span>Model for reading labels and reports</span><input list="dl-vision-${p}" data-sbind="${p}VisionModel" value="${esc(s[p + "VisionModel"])}" placeholder="${esc(P.vision)}" spellcheck="false" autocapitalize="off"></label>
+        </div>
+        <datalist id="dl-text-${p}">${P.textModels.map(m => `<option value="${esc(m)}"></option>`).join("")}</datalist>
+        <datalist id="dl-vision-${p}">${P.visionModels.map(m => `<option value="${esc(m)}"></option>`).join("")}</datalist>
+        <p class="hint">Leave the model fields empty to use the defaults shown. PDF reports can only be read with Claude – with ${esc(P.short)}, select photos or screenshots of the pages instead.</p>`;
+        })()}
         <div class="actions"><button class="btn" data-action="ai-test">Test connection</button><span id="ai-test-out" class="small" role="status"></span></div>
       </section>
       <section class="block form-block"><h2>Sync</h2>
@@ -3835,11 +3921,11 @@ Rules:
       setPath(Store.settings, p, el.value);
       Store.saveSettings();
       if (p === "gh.owner" || p === "gh.repo") Store.resetSync();
-      if (p === "model") render();
+      if (p === "model" || p === "aiProvider") render();
     } else if (el.id === "ask-text") {
       S.askDraft = el.value;
     } else if (el.matches("[data-scan]")) {
-      const f = el.files && el.files[0]; el.value = ""; scanFile(f);
+      const fs = Array.from(el.files || []); el.value = ""; scanFiles(fs);
     } else if (el.matches("[data-import]")) {
       const f = el.files && el.files[0]; el.value = ""; importData(f);
     }
