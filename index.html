@@ -2812,7 +2812,12 @@ window.KB = {
     if (retried) body.enable_thinking = false;
     let res;
     try { res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-proxy-token": token }, body: JSON.stringify(body) }); }
-    catch (e) { throw new Error("Can't reach your proxy. Check the address under Settings, and that the HTTP trigger allows GET, POST and OPTIONS without authentication."); }
+    catch (e) {
+      let reachable = false;
+      try { await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" }); reachable = true; } catch (e2) { reachable = false; }
+      if (reachable) throw new Error(`Your proxy is reachable but doesn't accept requests from this app. In Function Compute, set the environment variable ALLOWED_ORIGIN to exactly ${location.origin} – or to * for a quick test – and try again.`);
+      throw new Error("Can't reach your proxy. Check the proxy address under Settings (use the one without “-vpc”, starting with https://), and that the HTTP trigger allows GET, POST and OPTIONS without authentication.");
+    }
     let j = null, raw = "";
     try { raw = await res.text(); j = JSON.parse(raw); } catch (e) { j = null; }
     if (!res.ok) {
@@ -4350,6 +4355,7 @@ Rules:
         <p class="hint">${esc(P.short)} doesn't accept requests straight from a browser, so Dose talks to a small proxy function in your Alibaba Cloud account that holds the API keys. One proxy serves both Qwen and DeepSeek – the setup guide is in PROXY.md. Address and password are stored only on this device.</p>
         <label class="field"><span>Proxy address</span><input data-sbind="proxyUrl" value="${esc(s.proxyUrl)}" placeholder="https://dose-proxy-….cn-shanghai.fcapp.run" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url"></label>
         <label class="field"><span>Proxy password</span><input type="password" data-sbind="proxyToken" value="${esc(s.proxyToken)}" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <p class="hint">In your proxy, <code>ALLOWED_ORIGIN</code> must be exactly: <strong class="origin">${esc(location.origin)}</strong></p>
         <div class="grid2">
           <label class="field"><span>Model for advice</span>${modelSelect(p + "Model", P.textModels)}</label>
           <label class="field"><span>Model for reading labels and reports</span>${modelSelect(p + "VisionModel", P.visionModels)}</label>
