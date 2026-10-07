@@ -2803,44 +2803,95 @@ window.KB = {
       throw new Error("PDF files can only be read with Claude. Take screenshots of the pages instead.");
     });
   }
-  async function callCompat({ system, messages, maxTokens, vision }, retried) {
+  function compatError(status, j, raw, name, modelId) {
+    const err = (j && j.error) || {};
+    const m = String(err.message || (j && j.message) || String(raw || "").slice(0, 200) || "");
+    const code = String(err.code || (j && j.code) || "");
+    if (err.source === "proxy") return new Error("Proxy: " + m);
+    if (/enable_thinking/i.test(m)) return Object.assign(new Error(m), { retryNoThinking: true });
+    if (status === 401 || /invalid_api_key|api.?key/i.test(code)) return new Error(`${name} rejected the API key stored in your proxy. Check the environment variable in Function Compute.`);
+    if (status === 402 || /insufficient|balance|arrearage/i.test(m + " " + code)) return new Error(`Your ${name} account has no credit left. Top it up in the provider's console.`);
+    if (/data_inspection|inappropriate/i.test(m + " " + code)) return new Error(`${name}'s content filter blocked this request. Try rephrasing it.`);
+    if (status === 429) return new Error("Too many requests in a short time. Wait a moment and try again.");
+    if (status === 404 || /model/i.test(m + " " + code)) return new Error(`The model “${modelId}” isn't available${m ? " (" + m + ")" : ""}. Choose another one under Settings.`);
+    if (status === 502 || status === 503) return new Error("Your proxy function failed to start or crashed. Check its logs in Function Compute, the start command (node index.js) and port 9000.");
+    if (status >= 500) return new Error(`${name} or your proxy had a problem (${status}). Try again in a few minutes.`);
+    return new Error("Request failed (" + status + ")" + (m ? ": " + m : "") + ".");
+  }
+  async function connectionError(url, t0, midStream) {
+    const secs = Math.round((Date.now() - t0) / 1000);
+    if (midStream || secs >= 15) return new Error(`The connection was dropped after ${secs} seconds while the AI was still working – often by a VPN or the mobile network. Make sure your proxy runs the latest index.js from PROXY.md (it keeps the connection alive), then try again – or choose a faster model under Settings.`);
+    let reachable = false;
+    try { await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" }); reachable = true; } catch (e) { reachable = false; }
+    if (reachable) return new Error(`Your proxy is reachable but didn't accept the request from this app. Check that ALLOWED_ORIGIN in Function Compute is exactly ${location.origin} (or * for a quick test).`);
+    return new Error("Can't reach your proxy. Check the proxy address under Settings (use the one without “-vpc”, starting with https://), and that the HTTP trigger allows GET, POST and OPTIONS without authentication.");
+  }
+  async function readStream(res) {
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "", text = "", finish = null, err = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true }).replace(/\r/g, "");
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const data = block.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).replace(/^ /, "")).join("\n");
+        if (!data || data === "[DONE]") continue;
+        let o;
+        try { o = JSON.parse(data); } catch (e) { continue; }
+        if (o.proxy_error || o.error) { err = o; continue; }
+        const ch = o.choices && o.choices[0];
+        if (!ch) continue;
+        if (ch.delta && typeof ch.delta.content === "string") text += ch.delta.content;
+        if (ch.finish_reason) finish = ch.finish_reason;
+      }
+    }
+    return { text, finish, err };
+  }
+  async function callCompat(opts, retried) {
+    const { system, messages, maxTokens, vision } = opts;
     const s = Store.settings, p = provider(), name = PROVIDERS[p].short;
     const url = (s.proxyUrl || "").trim(), token = (s.proxyToken || "").trim();
     if (!url || !token) throw new Error("Add your proxy address and password under Settings first.");
-    const body = { provider: p, model: model(!!vision), max_tokens: vision ? Math.min(maxTokens || 4000, 8000) : 16000,
+    const body = { provider: p, model: model(!!vision), stream: true, max_tokens: vision ? Math.min(maxTokens || 4000, 8000) : 16000,
       messages: [{ role: "system", content: system }].concat(messages.map(m => ({ role: m.role, content: toCompat(m.content) }))) };
     if (retried) body.enable_thinking = false;
+    const t0 = Date.now();
     let res;
     try { res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-proxy-token": token }, body: JSON.stringify(body) }); }
-    catch (e) {
-      let reachable = false;
-      try { await fetch(url, { method: "GET", mode: "no-cors", cache: "no-store" }); reachable = true; } catch (e2) { reachable = false; }
-      if (reachable) throw new Error(`Your proxy is reachable but doesn't accept requests from this app. In Function Compute, set the environment variable ALLOWED_ORIGIN to exactly ${location.origin} – or to * for a quick test – and try again.`);
-      throw new Error("Can't reach your proxy. Check the proxy address under Settings (use the one without “-vpc”, starting with https://), and that the HTTP trigger allows GET, POST and OPTIONS without authentication.");
+    catch (e) { throw await connectionError(url, t0, false); }
+    let text = "", finish = null;
+    if (/event-stream/i.test(res.headers.get("content-type") || "")) {
+      let r;
+      try { r = await readStream(res); } catch (e) { throw await connectionError(url, t0, true); }
+      if (r.err) {
+        const pe = r.err.proxy_error;
+        const raw = pe ? String(pe.body || "") : JSON.stringify(r.err);
+        let j = r.err;
+        if (pe) { try { j = JSON.parse(raw); } catch (e) { j = null; } }
+        const er = compatError(pe ? pe.status : 500, j, raw, name, body.model);
+        if (er.retryNoThinking && !retried) return callCompat(opts, true);
+        throw er;
+      }
+      text = r.text; finish = r.finish;
+    } else {
+      let j = null, raw = "";
+      try { raw = await res.text(); j = JSON.parse(raw); } catch (e) { j = null; }
+      if (!res.ok) {
+        const er = compatError(res.status, j, raw, name, body.model);
+        if (er.retryNoThinking && !retried) return callCompat(opts, true);
+        throw er;
+      }
+      const ch = j && j.choices && j.choices[0];
+      text = ch && ch.message ? ch.message.content : "";
+      if (Array.isArray(text)) text = text.map(x => x.text || "").join("");
+      finish = ch && ch.finish_reason;
     }
-    let j = null, raw = "";
-    try { raw = await res.text(); j = JSON.parse(raw); } catch (e) { j = null; }
-    if (!res.ok) {
-      const err = (j && j.error) || {};
-      const m = String(err.message || (j && j.message) || raw.slice(0, 200) || "");
-      const code = String(err.code || (j && j.code) || "");
-      if (err.source === "proxy") throw new Error("Proxy: " + m);
-      if (!retried && /enable_thinking/i.test(m)) return callCompat({ system, messages, maxTokens, vision }, true);
-      if (res.status === 401 || /invalid_api_key|api.?key/i.test(code)) throw new Error(`${name} rejected the API key stored in your proxy. Check the environment variable in Function Compute.`);
-      if (res.status === 402 || /insufficient|balance|arrearage/i.test(m + " " + code)) throw new Error(`Your ${name} account has no credit left. Top it up in the provider's console.`);
-      if (/data_inspection|inappropriate/i.test(m + " " + code)) throw new Error(`${name}'s content filter blocked this request. Try rephrasing it.`);
-      if (res.status === 429) throw new Error("Too many requests in a short time. Wait a moment and try again.");
-      if (res.status === 404 || /model/i.test(m + " " + code)) throw new Error(`The model “${body.model}” isn't available${m ? " (" + m + ")" : ""}. Choose another one under Settings.`);
-      if (res.status === 502 || res.status === 503) throw new Error("Your proxy function failed to start or crashed. Check its logs in Function Compute, the start command (node index.js) and port 9000.");
-      if (res.status >= 500) throw new Error(`${name} or your proxy had a problem (${res.status}). Try again in a few minutes.`);
-      throw new Error("Request failed (" + res.status + ")" + (m ? ": " + m : "") + ".");
-    }
-    const ch = j && j.choices && j.choices[0];
-    let text = ch && ch.message ? ch.message.content : "";
-    if (Array.isArray(text)) text = text.map(x => x.text || "").join("");
     text = String(text || "").trim();
-    if (!text) throw new Error(ch && ch.finish_reason === "length" ? `${name} used up its answer length while thinking. Try again or choose a faster model.` : `${name} returned an empty answer. Try again or choose another model.`);
-    if (ch.finish_reason === "length") text += "\n\n_The answer was cut off because of its length._";
+    if (!text) throw new Error(finish === "length" ? `${name} used up its answer length while thinking. Try again or choose a faster model.` : `${name} returned an empty answer. Try again or choose another model.`);
+    if (finish === "length") text += "\n\n_The answer was cut off because of its length._";
     return text;
   }
 
