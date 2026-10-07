@@ -573,6 +573,43 @@ table.hist .num { font-variant-numeric: tabular-nums; }
 .lv-unrated { background: var(--info-bg); color: var(--ink-3); }
 .li-unit select, .li-unit input { width: 100%; min-height: 42px; }
 
+/* ---------- v4: files, home blood pressure ---------- */
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.section-head h2 { margin: 0; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0 12px; }
+.thumb { position: relative; }
+.thumb-btn { display: grid; place-items: center; width: 88px; height: 88px; padding: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); overflow: hidden; cursor: pointer; }
+.thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-btn.missing img { display: none; }
+.thumb-btn.missing::after { content: "Not on this device"; font-size: 11px; color: var(--ink-3); padding: 6px; text-align: center; }
+.thumb-pdf { font: 700 14px var(--sans); color: var(--danger); }
+.thumb-del { position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); }
+.thumb-del svg { width: 14px; height: 14px; }
+.viewer { position: fixed; inset: 0; z-index: 90; background: rgba(0, 0, 0, .92); display: grid; place-items: center; padding: 16px; }
+.viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.viewer-close { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); right: 10px; color: #fff; background: rgba(255, 255, 255, .14); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+.check input { width: auto; min-height: 0; }
+.ing-match .spinner, .li-match .spinner { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 6px; }
+.mt8 { margin-top: 8px; }
+.bp-avgs { display: grid; gap: 8px; margin: 4px 0 6px; }
+@media (min-width: 760px) { .bp-avgs { grid-template-columns: 1fr 1fr; } }
+.bp-avg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.bp-avg-label { font-size: 13px; color: var(--ink-3); min-width: 90px; }
+.bp-avg-val { font-family: var(--serif); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bpchart-wrap { margin: 12px 0 8px; }
+svg.bpchart { width: 100%; height: auto; display: block; stroke: none; fill: none; }
+.bp-grid { stroke: var(--line); stroke-width: 1; }
+.bp-th { stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.bp-line { fill: none; stroke-width: 2.2; }
+path.bp-sys { stroke: var(--s-abend); } path.bp-dia { stroke: var(--s-schlaf); }
+.bp-dots circle { stroke: none; }
+.bp-dots.bp-sys circle { fill: var(--s-abend); } .bp-dots.bp-dia circle { fill: var(--s-schlaf); }
+.bp-tick { fill: var(--ink-3); font: 11px var(--sans); stroke: none; }
+.bp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.bp-legend span::before { content: ""; display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.k-sys::before { background: var(--s-abend); } .k-dia::before { background: var(--s-schlaf); } .k-th::before { background: var(--warn); }
+
 </style>
 </head>
 <body>
@@ -1380,6 +1417,105 @@ window.KB = {
 </script>
 <script>
 /* =====================================================================
+   KNOWLEDGE BASE – MORE SUPPLEMENTS
+   Common supplements beyond vitamins and minerals.
+   ===================================================================== */
+(function () {
+  const KB = window.KB;
+  const N = (id, name, unit, aliases, o) => Object.assign({ id, name, unit, aliases }, o);
+  KB.nutrients.push(
+    N("nac", "NAC (N-acetylcysteine)", "mg", ["nac", "nacetylcysteine", "nacetylcystein", "acetylcysteine", "acetylcystein", "乙酰半胱氨酸"],
+      { slots: ["breakfast", "dinner"], timing: "With or without food; split larger doses.", dosing: "Studies mostly use 600–1200 mg a day. Can cause stomach upset; also loosens mucus." }),
+    N("alpha_lipoic", "Alpha-lipoic acid", "mg", ["alphalipoicacid", "lipoicacid", "alphaliponsaeure", "liponsaeure", "thioctacid", "硫辛酸"],
+      { slots: ["fasting", "breakfast"], timing: "Best absorbed on an empty stomach, about 30 minutes before a meal.", dosing: "Usually 300–600 mg a day; studied mainly for diabetic nerve pain. Can lower blood sugar." }),
+    N("carnitine", "L-carnitine", "mg", ["carnitine", "lcarnitine", "carnitin", "lcarnitin", "acetyllcarnitine", "acetylcarnitine", "左旋肉碱", "肉碱"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 1–2 g a day. The body makes its own; extra mainly matters with a vegan diet or specific conditions." }),
+    N("taurine", "Taurine", "mg", ["taurine", "taurin", "牛磺酸"],
+      { slots: ["breakfast", "lunch", "dinner"], timing: "Any time.", dosing: "Usually 1–3 g a day; considered safe up to about 3 g. Evidence for most claims is limited." }),
+    N("lutein", "Lutein / zeaxanthin", "mg", ["lutein", "zeaxanthin", "mesozeaxanthin", "叶黄素", "玉米黄质"],
+      { fat: true, slots: ["lunch", "dinner"], timing: "With a meal that contains fat.", dosing: "Eye studies (AREDS2) used 10 mg lutein plus 2 mg zeaxanthin a day." }),
+    N("astaxanthin", "Astaxanthin", "mg", ["astaxanthin", "虾青素"],
+      { fat: true, slots: ["lunch", "dinner"], timing: "With a meal that contains fat.", dosing: "Usually 4–12 mg a day; human evidence is limited." }),
+    N("resveratrol", "Resveratrol", "mg", ["resveratrol", "transresveratrol", "白藜芦醇"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Doses vary widely (150–500 mg); benefits in humans are not well established." }),
+    N("quercetin", "Quercetin", "mg", ["quercetin", "槲皮素"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 500–1000 mg a day; evidence for most claims is limited." }),
+    N("ginseng", "Ginseng (Panax)", "mg", ["ginseng", "panaxginseng", "koreanginseng", "redginseng", "人参", "红参", "高丽参"],
+      { slots: ["breakfast", "lunch"], avoid: [{ slot: "dinner", why: "can make it harder to fall asleep", sev: "info" }, { slot: "bedtime", why: "can make it harder to fall asleep", sev: "timing" }],
+        timing: "Morning or midday – it can disturb sleep.", dosing: "Usually 200–400 mg standardized extract; often taken in cycles of a few weeks with breaks.",
+        review: { weeks: 12, text: "Ginseng is usually taken in cycles – consider a break." } }),
+    N("rhodiola", "Rhodiola", "mg", ["rhodiola", "rhodiolarosea", "rosenwurz", "红景天"],
+      { slots: ["breakfast"], avoid: [{ slot: "bedtime", why: "can be stimulating", sev: "timing" }], timing: "In the morning, before breakfast or with it.",
+        dosing: "Usually 200–600 mg extract a day; evidence for fatigue and stress is limited." }),
+    N("milk_thistle", "Milk thistle (silymarin)", "mg", ["milkthistle", "silymarin", "mariendistel", "水飞蓟", "水飞蓟素"],
+      { slots: ["breakfast", "lunch", "dinner"], timing: "With meals.", dosing: "Usually 140–420 mg silymarin a day; benefit for liver values is uncertain." }),
+    N("garlic", "Garlic extract", "mg", ["garlic", "agedgarlic", "allicin", "knoblauch", "大蒜", "大蒜素"],
+      { slots: ["lunch", "dinner"], timing: "With a meal.", dosing: "Aged garlic extract 600–1200 mg a day is common; small effects on blood pressure and cholesterol." }),
+    N("saw_palmetto", "Saw palmetto", "mg", ["sawpalmetto", "saegepalme", "serenoa", "锯棕榈"],
+      { slots: ["breakfast", "dinner"], timing: "With a meal.", dosing: "Usually 320 mg extract a day; good studies found little effect on prostate symptoms." }),
+    N("msm", "MSM (methylsulfonylmethane)", "mg", ["msm", "methylsulfonylmethane", "二甲基砜"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 1.5–3 g a day for joint complaints; evidence is limited." }),
+    N("chondroitin", "Chondroitin", "mg", ["chondroitin", "软骨素"],
+      { slots: ["breakfast", "dinner"], timing: "With a meal.", dosing: "Usually 800–1200 mg a day, often with glucosamine; benefit for osteoarthritis is debated." }),
+    N("hyaluronic", "Hyaluronic acid", "mg", ["hyaluronicacid", "hyaluronan", "hyaluronsaeure", "hyaluron", "玻尿酸", "透明质酸"],
+      { slots: ["breakfast", "lunch"], timing: "Any time.", dosing: "Oral studies used 120–240 mg a day (skin, joints); evidence is early." }),
+    N("boron", "Boron", "mg", ["boron", "bor", "硼"],
+      { ul: { value: 10, kind: "UL", scope: "total", src: "EFSA" }, slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "1–3 mg a day is typical; a need for boron in humans isn't established." }),
+    N("molybdenum", "Molybdenum", "µg", ["molybdenum", "molybdaen", "钼"],
+      { ul: { value: 600, kind: "UL", scope: "total", src: "SCF/EFSA" }, slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Needs are about 65 µg a day; deficiency is practically unknown." }),
+    N("inositol", "Inositol", "mg", ["inositol", "myoinositol", "dchiroinositol", "肌醇"],
+      { slots: ["breakfast", "dinner"], timing: "Split between morning and evening.", dosing: "Studies (e.g. PCOS) used 2–4 g myo-inositol a day." }),
+    N("beta_alanine", "Beta-alanine", "mg", ["betaalanine", "betaalanin", "beta丙氨酸"],
+      { slots: ["breakfast", "lunch", "dinner"], timing: "Split into doses of 800 mg or less to limit tingling.", dosing: "3.2–6.4 g a day for several weeks improves high-intensity performance.",
+        alerts: [{ min: 1600, sev: "info", title: "Beta-alanine: harmless tingling", text: "Larger single doses cause a harmless tingling of the skin. Split the daily amount or use a slow-release form." }] }),
+    N("citrulline", "L-citrulline", "g", ["citrulline", "lcitrulline", "citrullin", "citrullinemalate", "瓜氨酸"],
+      { slots: ["breakfast", "lunch"], timing: "About an hour before training.", dosing: "3–6 g L-citrulline (or 6–8 g citrulline malate) are used for training." }),
+    N("psyllium", "Psyllium husk (fiber)", "g", ["psyllium", "flohsamen", "flohsamenschalen", "ispaghula", "车前子", "洋车前子壳"],
+      { slots: ["breakfast", "dinner"], timing: "With a large glass of water, about 2 hours apart from medication and minerals.", dosing: "5–10 g a day; start low to avoid bloating.",
+        alerts: [{ min: 0, sev: "info", title: "Take fiber apart from medication", text: "Psyllium can reduce the absorption of medication and minerals – keep about 2 hours apart, and drink plenty of water." }] }),
+    N("sodium", "Sodium (electrolytes)", "mg", ["sodium", "natrium", "electrolytes", "elektrolyte", "钠"],
+      { slots: ["breakfast", "lunch"], timing: "Around long training sessions or heavy sweating.", dosing: "Most people already get more than enough from food; extra mainly makes sense with long endurance training or heavy sweating." }),
+    N("lions_mane", "Lion's mane", "mg", ["lionsmane", "hericium", "igelstachelbart", "猴头菇"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 500–3000 mg extract; human evidence is very limited." }),
+    N("nad_precursor", "NMN / NR (NAD+ precursors)", "mg", ["nmn", "nicotinamidemononucleotide", "nicotinamideriboside", "βnmn", "betanmn", "烟酰胺单核苷酸", "烟酰胺核糖"],
+      { slots: ["breakfast"], timing: "In the morning.", dosing: "Usually 250–1000 mg; long-term benefits in humans are not established." }),
+    N("spermidine", "Spermidine", "mg", ["spermidine", "spermidin", "亚精胺"],
+      { slots: ["breakfast"], timing: "With breakfast.", dosing: "Supplements usually provide 1–6 mg; human evidence is early." }),
+    N("saffron", "Saffron extract", "mg", ["saffron", "safran", "crocus", "藏红花", "西红花"],
+      { slots: ["breakfast", "dinner"], timing: "With a meal.", dosing: "Studies on low mood used 30 mg extract a day for 6–8 weeks." }),
+    N("protein", "Protein powder", "g", ["protein", "whey", "wheyprotein", "eiweiss", "eiweisspulver", "caseine", "casein", "乳清蛋白", "蛋白粉"],
+      { slots: ["breakfast", "lunch", "dinner"], timing: "Any time; spread protein across the day.", dosing: "Counts toward total protein: about 1.2–2 g per kg body weight a day is common for strength training." }),
+    N("spirulina", "Spirulina", "g", ["spirulina", "螺旋藻"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 1–5 g a day. Contains vitamin K; buy tested products (contamination)." }),
+    N("chlorella", "Chlorella", "g", ["chlorella", "小球藻"],
+      { slots: ["breakfast", "lunch"], timing: "With a meal.", dosing: "Usually 2–6 g a day. Contains vitamin K; human evidence is limited." })
+  );
+
+  KB.drugRules.push(
+    { drug: ["vka", "anticoag"], n: ["garlic", "resveratrol"], sev: "warn", text: "{n} can add to bleeding risk. Discuss with your doctor." },
+    { drug: "vka", n: "ginseng", sev: "warn", text: "Ginseng can weaken the effect of warfarin-type blood thinners. Agree on INR checks with your doctor." },
+    { drug: "vka", n: ["carnitine", "chondroitin"], sev: "warn", text: "{n} can strengthen the effect of warfarin-type blood thinners (INR rises have been reported)." },
+    { drug: "vka", n: ["spirulina", "chlorella"], sev: "warn", text: "{n} contains vitamin K and can affect your INR. Keep the amount steady and tell your doctor." },
+    { drug: "antidiabetic", n: ["ginseng", "alpha_lipoic"], sev: "info", text: "{n} can lower blood sugar. Keep an eye on your values." },
+    { drug: "thyroid", n: "psyllium", sep: 4, medSlot: "fasting", sev: "timing", text: "Psyllium can reduce absorption of thyroid hormone. Keep at least 4 hours apart." },
+    { drug: "thyroid", n: "carnitine", sev: "info", text: "L-carnitine may weaken the action of thyroid hormone. Have your values checked." },
+    { drug: "serotonergic", n: "saffron", sev: "info", text: "Saffron may add to the effect of antidepressants. Talk to your doctor before combining them." },
+    { drug: "immunosuppressants", n: ["spirulina", "chlorella"], sev: "warn", text: "{n} can stimulate the immune system and counteract immunosuppressants." }
+  );
+
+  KB.conditionRules.push(
+    { c: "pregnancy", n: ["ginseng", "rhodiola", "saw_palmetto", "milk_thistle", "resveratrol", "lions_mane", "nad_precursor", "spermidine", "saffron"], sev: "warn", text: "Safety data for {n} in pregnancy and breastfeeding are missing. Check with your doctor." },
+    { c: "hypertension", n: "sodium", min: 500, sev: "warn", text: "Extra sodium raises blood pressure. Only with long endurance training or heavy sweating – discuss with your doctor." },
+    { c: ["kidney", "kidneyLab"], n: "protein", sev: "info", text: "With reduced kidney function, protein intake should be agreed with your doctor." },
+    { c: "bleeding", n: ["garlic", "resveratrol"], sev: "warn", text: "{n} can increase bleeding tendency." },
+    { c: "surgery", n: ["garlic", "ginseng"], sev: "warn", text: "{n} is usually paused 1–2 weeks before surgery – check with your doctor." },
+    { c: "autoimmune", n: ["spirulina", "chlorella"], sev: "info", text: "{n} can stimulate the immune system. Check with your doctor if you have an autoimmune disease." }
+  );
+})();
+
+</script>
+<script>
+/* =====================================================================
    RULE ENGINE – evaluates profile, supplements and results
    ===================================================================== */
 (function () {
@@ -1471,8 +1607,45 @@ window.KB = {
       return found;
     };
   }
-  const matchNutrient = matcher(buildAliases(KB.nutrients), NUT);
+  let matchNutrientImpl = matcher(buildAliases(KB.nutrients), NUT);
+  function matchNutrient(name) { return matchNutrientImpl(name); }
   const matchMarker = matcher(buildAliases(KB.markers), MK, KB.markerIgnore);
+
+  // ---------- your own (AI-researched) ingredients ----------
+  const BASE = { nutrients: KB.nutrients.slice(), drugRules: KB.drugRules.slice(), conditionRules: KB.conditionRules.slice(), pairs: KB.pairs.slice() };
+  const BASE_IDS = new Set(BASE.nutrients.map(n => n.id));
+  const SEVS = ["danger", "warn", "timing", "info"];
+  let customSig = "[]";
+  function setCustom(list) {
+    list = Array.isArray(list) ? list : [];
+    const sig = JSON.stringify(list);
+    if (sig === customSig) return;
+    customSig = sig;
+    const nuts = [], dr = [], cr = [], pr = [], note = " (AI-researched entry – verify)";
+    list.forEach(c => {
+      if (!c || !c.id || !c.name) return;
+      const ulv = c.ul && parseNum(c.ul.value);
+      nuts.push({ id: c.id, name: c.name, unit: KB.units.includes(c.unit) ? c.unit : "mg", aliases: (c.aliases || []).filter(a => typeof a === "string"),
+        timing: c.timing || "", dosing: c.dosing || "", forms: c.forms || "", slots: (c.slots || []).filter(s => SLOT[s]), fat: !!c.fat, custom: true,
+        ul: ulv ? { value: ulv, kind: "guide", scope: "total", src: c.ul.src || "AI research", note: "From an AI-researched entry – verify" } : null });
+      (c.drugRules || []).forEach(r => { if (r && r.text && KB.drugClasses.some(x => x.id === r.drug)) dr.push({ drug: r.drug, n: c.id, sev: SEVS.includes(r.sev) ? r.sev : "info", text: r.text + note }); });
+      (c.conditionRules || []).forEach(r => { if (r && r.text && COND[r.c]) cr.push({ c: r.c, n: c.id, sev: SEVS.includes(r.sev) ? r.sev : "info", text: r.text + note }); });
+      (c.pairs || []).forEach(p => {
+        if (!p || !p.text || !BASE_IDS.has(p.other)) return;
+        const kind = ["separate", "avoid", "synergy"].includes(p.kind) ? p.kind : "avoid";
+        const other = BASE.nutrients.find(n => n.id === p.other).name;
+        pr.push({ a: c.id, b: p.other, kind, hours: parseNum(p.hours) || 2, sev: kind === "avoid" ? "warn" : undefined,
+          title: kind === "separate" ? `Keep ${c.name} and ${other} apart` : `${c.name} and ${other}`, text: p.text + note });
+      });
+    });
+    KB.nutrients = BASE.nutrients.concat(nuts);
+    KB.drugRules = BASE.drugRules.concat(dr);
+    KB.conditionRules = BASE.conditionRules.concat(cr);
+    KB.pairs = BASE.pairs.concat(pr);
+    Object.keys(NUT).forEach(k => { if (!BASE_IDS.has(k)) delete NUT[k]; });
+    nuts.forEach(n => { NUT[n.id] = n; });
+    matchNutrientImpl = matcher(buildAliases(KB.nutrients), NUT);
+  }
 
   // ---------- supplement units ----------
   const MASS = { g: 1e6, mg: 1e3, "µg": 1 };
@@ -1667,9 +1840,35 @@ window.KB = {
     return conds;
   }
 
+  // ---------- home blood pressure ----------
+  function isoLocal(d) { const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+  function bpLevel(sys, dia) {
+    if (sys >= 180 || dia >= 110) return "critHigh";
+    if (sys >= 135 || dia >= 85) return "high";
+    if (sys >= 130 || dia >= 80) return "aboveTarget";
+    if (sys < 90 || dia < 60) return "low";
+    return "normal";
+  }
+  function bpStats(data, opts) {
+    const now = opts && opts.today ? new Date(opts.today) : new Date();
+    const list = (data.bp || []).map(r => ({ r, t: new Date(String(r.at || "")), sys: parseNum(r.sys), dia: parseNum(r.dia), pulse: parseNum(r.pulse) }))
+      .filter(x => x.sys && x.dia && !isNaN(x.t)).sort((a, b) => a.t - b.t);
+    const avg = days => {
+      const arr = list.filter(x => x.t <= now && (now - x.t) / 864e5 <= days);
+      if (!arr.length) return null;
+      const mean = k => arr.reduce((s, x) => s + x[k], 0) / arr.length;
+      const ps = arr.filter(x => x.pulse);
+      return { sys: mean("sys"), dia: mean("dia"), pulse: ps.length ? ps.reduce((s, x) => s + x.pulse, 0) / ps.length : null, n: arr.length, days };
+    };
+    return { list, last: list[list.length - 1] || null, avg7: avg(7), avg30: avg(30) };
+  }
+
   // ---------- main analysis ----------
   function analyze(data, opts) {
     opts = opts || {};
+    setCustom(data.customNutrients);
+    const bpsA = bpStats(data, opts);
+    const bpDateA = bpsA.last ? isoLocal(bpsA.last.t) : null;
     const all = opts.supplements || data.supplements || [];
     const supps = all.filter(isActive);
     const profile = data.profile || {};
@@ -1857,6 +2056,7 @@ window.KB = {
     labs.forEach(h => {
       const last = h.last;
       if (!last || last.level === "unknown") return;
+      if ((h.key === "bp_sys" || h.key === "bp_dia") && bpDateA && bpDateA >= last.date) return;
       const m = h.marker;
       const value = `${last.item.value} ${last.unit}`.trim();
       const date = fmtDate(last.date);
@@ -1881,6 +2081,24 @@ window.KB = {
           text: `${value} on ${date} is outside the reference range. Discuss it with your doctor.`, lab: h.key });
       }
     });
+
+    // 8) home blood pressure
+    if (bpsA.list.length) {
+      const now = opts.today ? new Date(opts.today) : new Date();
+      const peak = bpsA.list.filter(x => (now - x.t) / 864e5 <= 14 && (x.sys >= 180 || x.dia >= 110)).pop();
+      if (peak) add({ id: "bp-crit", sev: "danger", tag: "Blood pressure", title: "Very high blood pressure reading",
+        text: `${peak.sys}/${peak.dia} mmHg on ${fmtDate(isoLocal(peak.t))}. Measure again after 5 minutes of rest. If it stays this high, see a doctor promptly – urgently with chest pain, shortness of breath, severe headache or problems with vision or speech.` });
+      const a = bpsA.avg7 && bpsA.avg7.n >= 3 ? bpsA.avg7 : bpsA.avg30 && bpsA.avg30.n >= 3 ? bpsA.avg30 : null;
+      if (a) {
+        const lv = bpLevel(a.sys, a.dia);
+        const txt = `Average ${Math.round(a.sys)}/${Math.round(a.dia)} mmHg from ${a.n} readings in the last ${a.days} days.`;
+        if (lv === "high" || lv === "critHigh") add({ id: "bp-avg", sev: "warn", tag: "Blood pressure", title: "Home blood pressure is high",
+          text: `${txt} At home, 135/85 or more counts as high. Less salt and alcohol, regular exercise and losing excess weight help – discuss your readings with your doctor.` });
+        else if (lv === "aboveTarget") add({ id: "bp-avg", sev: "info", tag: "Blood pressure", title: "Home blood pressure is high-normal",
+          text: `${txt} Below 130/80 is a common target; less salt, regular exercise and limiting alcohol help.` });
+        else if (lv === "normal") add({ id: "bp-avg", sev: "good", tag: "Blood pressure", title: "Home blood pressure in range", text: txt });
+      }
+    }
 
     const findings = uniqBy(F, f => f.id).sort((a, b) => SEV_ORDER[a.sev] - SEV_ORDER[b.sev]);
     return { findings, totals, meds, labs, conds };
@@ -1909,6 +2127,7 @@ window.KB = {
 
   // ---------- suggested time of day ----------
   function suggestSlots(draft, data) {
+    setCustom(data.customNutrients);
     const nuts = suppNutrients(draft);
     if (!nuts.length) return null;
     const others = (data.supplements || []).filter(s => s.id !== draft.id && isActive(s));
@@ -1953,18 +2172,27 @@ window.KB = {
     const sex = sexKey(p);
     const by = parseNum(p.birthYear);
     const age = by ? today.getFullYear() - by : null;
+    setCustom(data.customNutrients);
     const labs = labHistory(data);
     const conds = conditionSet(data, labs);
     const meds = matchDrugs(p.medications);
+    const bpLast = bpStats(data, opts).last;
+    const bpDate = bpLast ? isoLocal(bpLast.t) : null;
     const totals = intake((data.supplements || []).filter(isActive));
     const exams = (data.exams || []);
     const items = [];
-    const lastMarker = list => { let d = null; (list || []).forEach(id => { const h = labs.get(id); if (h && h.last && h.last.date && (!d || h.last.date > d)) d = h.last.date; }); return d; };
+    const lastMarker = list => {
+      let d = null;
+      (list || []).forEach(id => { const h = labs.get(id); if (h && h.last && h.last.date && (!d || h.last.date > d)) d = h.last.date; });
+      if (bpDate && (list || []).some(id => id === "bp_sys" || id === "bp_dia") && (!d || bpDate > d)) d = bpDate;
+      return d;
+    };
     const lastExam = types => exams.filter(e => e.date && types.includes(e.type)).sort((a, b) => (a.date < b.date ? 1 : -1))[0] || null;
 
     labs.forEach(h => {
       const l = h.last;
       if (!l || !l.date || !["low", "high", "critLow", "critHigh"].includes(l.level)) return;
+      if ((h.key === "bp_sys" || h.key === "bp_dia") && bpDate && bpDate >= l.date) return;
       const crit = l.level.indexOf("crit") === 0;
       const weeks = (h.marker && h.marker.retestWeeks) || 12;
       items.push({ id: "fu:" + h.key, cat: "Follow-up", title: h.name, markers: [h.key], urgent: crit, last: l.date,
@@ -2055,7 +2283,7 @@ window.KB = {
   }
 
   window.Engine = {
-    analyze, diff, suggestSlots, schedule, labHistory, evaluate, matchNutrient, matchMarker, matchDrugs, intake, effectiveUL,
+    analyze, diff, suggestSlots, schedule, labHistory, setCustom, bpStats, bpLevel, evaluate, matchNutrient, matchMarker, matchDrugs, intake, effectiveUL,
     toBase, normUnit, refFor, targetFor, toCanon, fromCanon, sameUnit, preferredUnit, markerUnits, unitKnown, labUnitKey,
     util: { norm, parseNum, fmt, fmtDate, parseDate, suppName, isActive, slotPhrase, slotList, servings, suppNutrients, cap, sexKey },
     SEV_ORDER, SLOT_HOURS, UL_KIND, LEVEL, NUT, MK, COND
@@ -2080,7 +2308,7 @@ window.KB = {
     return { birthYear: "", sex: "", heightCm: "", weightKg: "", conditions: [], conditionsText: "", medications: [], allergies: "",
       diet: "", dietNotes: "", activity: "", sport: "", sleepHours: "", stress: "", smoking: "", alcohol: "", goals: [], goalsText: "", labUnits: "si" };
   }
-  function emptyData() { return { version: 2, meta: { updatedAt: null }, profile: emptyProfile(), supplements: [], labs: [], exams: [], reports: [] }; }
+  function emptyData() { return { version: 3, meta: { updatedAt: null }, profile: emptyProfile(), supplements: [], labs: [], exams: [], bp: [], customNutrients: [], deletedFiles: [], reports: [] }; }
   function normalize(d) {
     const out = emptyData();
     if (!d || typeof d !== "object") return out;
@@ -2107,6 +2335,10 @@ window.KB = {
     delete out.profile.labs;
     out.exams = Array.isArray(d.exams) ? d.exams : [];
     out.exams.forEach(e => { if (!e.id) e.id = uid(); });
+    out.bp = Array.isArray(d.bp) ? d.bp : [];
+    out.bp.forEach(r => { if (!r.id) r.id = uid(); });
+    out.customNutrients = Array.isArray(d.customNutrients) ? d.customNutrients : [];
+    out.deletedFiles = Array.isArray(d.deletedFiles) ? d.deletedFiles : [];
     out.reports = Array.isArray(d.reports) ? d.reports : [];
     return out;
   }
@@ -2138,6 +2370,45 @@ window.KB = {
     wipe() { LS.del(KEYS.data); LS.del(KEYS.sync); this.data = emptyData(); LS.set(KEYS.data, JSON.stringify(this.data)); }
   };
   window.Store = Store;
+})();
+
+</script>
+<script>
+/* =====================================================================
+   FILES – photos and PDFs attached to lab reports, examinations and
+   blood pressure readings. Stored in this browser's IndexedDB (plenty
+   of space); with sync they are also stored encrypted in your repository.
+   ===================================================================== */
+(function () {
+  const mem = new Map();
+  let dbp = null;
+  function open() {
+    if (dbp) return dbp;
+    dbp = new Promise(resolve => {
+      try {
+        const r = indexedDB.open("dose-files", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("files", { keyPath: "id" });
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+    return dbp;
+  }
+  function run(db, mode, fn) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("files", mode);
+      const req = fn(tx.objectStore("files"));
+      tx.oncomplete = () => resolve(req ? req.result : undefined);
+      tx.onerror = () => reject(tx.error || new Error("The file couldn't be stored – the device may be out of space."));
+      tx.onabort = () => reject(tx.error || new Error("The file couldn't be stored – the device may be out of space."));
+    });
+  }
+  async function put(rec) { const db = await open(); if (!db) { mem.set(rec.id, rec); return rec; } await run(db, "readwrite", s => s.put(rec)); return rec; }
+  async function get(id) { const db = await open(); if (!db) return mem.get(id) || null; return (await run(db, "readonly", s => s.get(id))) || null; }
+  async function del(id) { const db = await open(); if (!db) { mem.delete(id); return; } await run(db, "readwrite", s => s.delete(id)); }
+  async function keys() { const db = await open(); if (!db) return Array.from(mem.keys()); return (await run(db, "readonly", s => s.getAllKeys())) || []; }
+  async function gc(keep) { const ks = await keys(); for (const k of ks) if (!keep.has(k)) await del(k); }
+  window.Attach = { put, get, del, keys, gc };
 })();
 
 </script>
@@ -2307,6 +2578,58 @@ window.KB = {
     else adopt(rdata, remote.sha, st);
   }
 
+  // ---------- attached files (photos, PDFs) ----------
+  function attPath(id) { return repoPath() + "/contents/files/" + encodeURIComponent(id) + ".json"; }
+  function fileRefs(d) {
+    const m = new Map();
+    [].concat(d.labs || [], d.exams || [], d.bp || []).forEach(o => (o && o.files || []).forEach(f => { if (f && f.id) m.set(f.id, f); }));
+    return m;
+  }
+  async function shaOf(path) {
+    const res = await api(path);
+    if (res.status === 404) return null;
+    if (!res.ok) throw await ghError(res);
+    return (await res.json()).sha;
+  }
+  async function syncFiles() {
+    if (!window.Attach) return;
+    const st = Store.getSync();
+    st.files = st.files || {};
+    const del = (Store.data.deletedFiles || []).slice();
+    for (const id of del) {
+      const path = attPath(id);
+      let sha = st.files[id] && st.files[id] !== "?" ? st.files[id] : await shaOf(path);
+      if (sha) {
+        const res = await api(path, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "Dose: file removed", sha }) });
+        if (!res.ok && res.status !== 404) throw await ghError(res);
+      }
+      delete st.files[id];
+      Store.setSync(st);
+    }
+    if (del.length) { Store.data.deletedFiles = (Store.data.deletedFiles || []).filter(x => !del.includes(x)); Store.save(); }
+    for (const [id] of fileRefs(Store.data)) {
+      if (st.files[id]) continue;
+      const rec = await Attach.get(id);
+      if (!rec) continue;
+      const env = await encrypt({ id, mime: rec.mime, name: rec.name, dataUrl: rec.dataUrl }, cfg().pass, st.salt);
+      const res = await api(attPath(id), { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Dose: file added", content: b64.from(enc.encode(JSON.stringify(env))) }) });
+      if (res.status === 409 || res.status === 422) { st.files[id] = "?"; Store.setSync(st); continue; }
+      if (!res.ok) throw await ghError(res);
+      st.files[id] = (await res.json()).content.sha;
+      Store.setSync(st);
+    }
+  }
+  async function fetchFile(id) {
+    if (!configured()) return null;
+    const res = await api(attPath(id), { headers: { Accept: "application/vnd.github.raw+json" } });
+    if (res.status === 404) return null;
+    if (!res.ok) throw await ghError(res);
+    const obj = await decrypt(JSON.parse(await res.text()), cfg().pass);
+    const st = Store.getSync(); st.files = st.files || {}; if (!st.files[id]) st.files[id] = "?"; Store.setSync(st);
+    return obj;
+  }
+
   async function run() {
     if (!configured()) { setStatus("aus"); return; }
     if (typeof navigator !== "undefined" && navigator.onLine === false) { setStatus("offline", "Offline – changes will sync later."); return; }
@@ -2315,6 +2638,7 @@ window.KB = {
     setStatus("laeuft", "Syncing …");
     try {
       await doSync(0);
+      await syncFiles();
       setStatus("ok", "");
     } catch (e) {
       console.error(e);
@@ -2331,7 +2655,7 @@ window.KB = {
   }
 
   const Sync = {
-    run, schedule, configured, checkRepo, encrypt, decrypt,
+    run, schedule, configured, checkRepo, encrypt, decrypt, fetchFile,
     get status() { return status; },
     onStatus(fn) { statusListeners.push(fn); },
     onConflict: null,
@@ -2447,10 +2771,12 @@ window.KB = {
   ];
   const PROVIDERS = {
     claude: { label: "Claude (Anthropic)", short: "Claude" },
-    qwen: { label: "Qwen (Alibaba Cloud)", short: "Qwen", text: "qwen3.5-plus", vision: "qwen3-vl-plus",
-      textModels: ["qwen3.5-plus", "qwen3-max", "qwen-plus", "qwen-flash"], visionModels: ["qwen3-vl-plus", "qwen3-vl-flash", "qwen-vl-ocr"] },
+    qwen: { label: "Qwen (Alibaba Cloud)", short: "Qwen", text: "qwen3.8-max", vision: "qwen3-vl-plus",
+      textModels: [["qwen3.8-max", "Qwen3.8-Max – most capable (recommended)"], ["qwen3.5-plus", "Qwen3.5-Plus – balanced, lower cost"], ["qwen-flash", "Qwen-Flash – fastest, cheapest"]],
+      visionModels: [["qwen3-vl-plus", "Qwen3-VL-Plus – built for reading images (recommended)"], ["qwen3.8-max", "Qwen3.8-Max – also reads images"], ["qwen3-vl-flash", "Qwen3-VL-Flash – cheaper"], ["qwen-vl-ocr", "Qwen-VL-OCR – pure text recognition"]] },
     deepseek: { label: "DeepSeek", short: "DeepSeek", text: "deepseek-v4-pro", vision: "deepseek-v4-flash-vision-exp",
-      textModels: ["deepseek-v4-pro", "deepseek-v4-flash"], visionModels: ["deepseek-v4-flash-vision-exp"] }
+      textModels: [["deepseek-v4-pro", "DeepSeek V4 Pro (recommended)"], ["deepseek-v4-flash", "DeepSeek V4 Flash – faster, cheaper"]],
+      visionModels: [["deepseek-v4-flash-vision-exp", "DeepSeek V4 Flash Vision – experimental"]] }
   };
   function provider() { const p = Store.settings.aiProvider; return PROVIDERS[p] ? p : "claude"; }
   function providerName() { return PROVIDERS[provider()].label; }
@@ -2458,7 +2784,8 @@ window.KB = {
   function model(vision) {
     const s = Store.settings, p = provider();
     if (p === "claude") return s.model === "custom" ? (s.customModel || "").trim() : (s.model || MODELS[0].id);
-    return (s[p + (vision ? "VisionModel" : "Model")] || "").trim() || PROVIDERS[p][vision ? "vision" : "text"];
+    const key = p + (vision ? "VisionModel" : "Model"), v = String(s[key] || "").trim(), def = PROVIDERS[p][vision ? "vision" : "text"];
+    return v === "__custom" ? (String(s[key + "Custom"] || "").trim() || def) : (v || def);
   }
   function modelLabel() { return provider() === "claude" ? model() : PROVIDERS[provider()].short + ": " + model(); }
   function hasKey() {
@@ -2480,7 +2807,7 @@ window.KB = {
     const s = Store.settings, p = provider(), name = PROVIDERS[p].short;
     const url = (s.proxyUrl || "").trim(), token = (s.proxyToken || "").trim();
     if (!url || !token) throw new Error("Add your proxy address and password under Settings first.");
-    const body = { provider: p, model: model(!!vision), max_tokens: Math.min(maxTokens || 4096, 8000),
+    const body = { provider: p, model: model(!!vision), max_tokens: vision ? Math.min(maxTokens || 4000, 8000) : 16000,
       messages: [{ role: "system", content: system }].concat(messages.map(m => ({ role: m.role, content: toCompat(m.content) }))) };
     if (retried) body.enable_thinking = false;
     let res;
@@ -2507,7 +2834,7 @@ window.KB = {
     let text = ch && ch.message ? ch.message.content : "";
     if (Array.isArray(text)) text = text.map(x => x.text || "").join("");
     text = String(text || "").trim();
-    if (!text) throw new Error(`${name} returned an empty answer. Try again or choose another model.`);
+    if (!text) throw new Error(ch && ch.finish_reason === "length" ? `${name} used up its answer length while thinking. Try again or choose a faster model.` : `${name} returned an empty answer. Try again or choose another model.`);
     if (ch.finish_reason === "length") text += "\n\n_The answer was cut off because of its length._";
     return text;
   }
@@ -2747,9 +3074,49 @@ Rules:
     });
     return parseJson(text, "The report couldn't be read reliably. Try a sharper photo or the PDF.");
   }
+  async function lookupIngredient(name, form) {
+    const classes = KB.drugClasses.map(c => `${c.id} (${c.name})`).join(", ");
+    const conds = KB.conditions.map(c => `${c.id} (${c.label})`).concat(["smoker (smokers)"]).join(", ");
+    const nuts = KB.nutrients.filter(n => !n.custom).map(n => `${n.id} (${n.name})`).join(", ");
+    const text = await call({
+      system: "You are a careful clinical pharmacist and nutrition scientist. You answer with valid JSON only.",
+      messages: [{ role: "user", content: `A supplement ingredient isn't in my app's database: "${name}"${form ? ` (form: ${form})` : ""}.
+Research it and answer only with a JSON object, no Markdown:
+{"known": boolean, "name": string, "aliases": [string], "unit": "mg"|"µg"|"g"|"IU"|"bn CFU", "timing": string, "dosing": string, "forms": string|null, "fat": boolean, "slots": [string], "upperLimit": {"value": number, "source": string}|null, "evidence": "strong"|"moderate"|"limited"|"weak", "drugInteractions": [{"class": string, "severity": "danger"|"warn"|"info", "text": string}], "conditionWarnings": [{"condition": string, "severity": "danger"|"warn"|"info", "text": string}], "nutrientInteractions": [{"nutrient": string, "kind": "separate"|"avoid"|"synergy", "hours": number|null, "text": string}]}
+Rules:
+- "known": false if you can't identify it with confidence (then leave the rest out). For a brand or product name, describe its main active ingredient.
+- "name": common English name. "aliases": other spellings and names, including German, Chinese and Latin ones.
+- "unit": the unit doses are usually given in.
+- "timing": when and how to take it, one or two sentences. "dosing": typical studied doses and how good the evidence is, two or three sentences.
+- "slots": best times of day, most suitable first, from: fasting, breakfast, lunch, dinner, bedtime. "fat": true if it should be taken with fat.
+- "upperLimit": only if an official body (EFSA, IOM/NAM or a national authority) set a daily upper limit; otherwise null.
+- Only list interactions that are documented in reliable sources. Each "text" is one or two sentences written for the user, in English.
+- "class" must be one of: ${classes}
+- "condition" must be one of: ${conds}
+- "nutrient" must be one of: ${nuts}` }],
+      maxTokens: 3000
+    });
+    return parseJson(text, "The AI's answer couldn't be read. Try again.");
+  }
+  async function readBloodPressure(dataUrl) {
+    const n = Array.isArray(dataUrl) ? dataUrl.length : 1;
+    const text = await call({
+      system: "You read blood pressure measurements from photos and answer with valid JSON only.",
+      messages: [{ role: "user", content: fileBlocks(dataUrl).concat([{ type: "text", text: `Read the blood pressure measurements from ${n > 1 ? "these " + n + " images" : "this image"}. It can be the display of a blood pressure monitor, a monitor's memory screen, or a written or printed log.
+Answer only with a JSON object, no Markdown:
+{"readings": [{"image": number, "datetime": "YYYY-MM-DDTHH:MM"|"YYYY-MM-DD"|null, "sys": number, "dia": number, "pulse": number|null}]}
+Rules:
+- "image" is the number of the image the reading comes from (1 for the first).
+- On a monitor display, SYS is the top number, DIA the middle one and PULSE the bottom one.
+- Use the date and time shown; if none is shown, use null. Today is ${new Date().toISOString().slice(0, 10)}.
+- One entry per measurement. Skip anything that isn't a blood pressure reading. Don't guess unreadable numbers.` }]) }],
+      maxTokens: 3000, vision: true
+    });
+    return parseJson(text, "The photo couldn't be read reliably. Try a sharper photo of the display.");
+  }
   function test() { return call({ system: "Answer with exactly one word.", messages: [{ role: "user", content: "Say 'Connected'." }], maxTokens: 300 }); }
 
-  window.AI = { MODELS, PROVIDERS, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
+  window.AI = { MODELS, PROVIDERS, lookupIngredient, readBloodPressure, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
 })();
 
 </script>
@@ -2857,6 +3224,7 @@ Rules:
   const VIEWS = { today: viewToday, supplements: viewSupplements, results: viewResults, advisor: viewAdvisor, profile: viewProfile, settings: viewSettings };
   function currentRoute() { const r = (location.hash || "").replace("#", ""); return VIEWS[r] ? r : "today"; }
   function render() {
+    Engine.setCustom(Store.data.customNutrients);
     S.route = currentRoute();
     $("#view").innerHTML = VIEWS[S.route]();
     $$("#nav a").forEach(a => { if (a.dataset.route === S.route) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
@@ -2876,7 +3244,7 @@ Rules:
     const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
     const sched = Engine.schedule(d);
     S.sched = sched.items;
-    if (!d.supplements.length && !d.labs.length && !d.exams.length) {
+    if (!d.supplements.length && !d.labs.length && !d.exams.length && !d.bp.length) {
       return `<section class="empty-hero">
         <h1>${esc(dateStr)}</h1>
         <p class="lead">Add what you take and your latest results. Dose builds your daily plan, checks amounts, timing and interactions – including with your medication – and tells you which check-ups are due.</p>
@@ -3032,7 +3400,7 @@ Rules:
     return head + [["active", "Active"], ["paused", "Paused"], ["stopped", "Stopped"]].map(([st, label]) => {
       const items = list.filter(s => (s.status || "active") === st);
       return items.length ? `<section class="block"><h2>${label} <span class="count">${items.length}</span></h2><ul class="supp-list">${items.map(suppRow).join("")}</ul></section>` : "";
-    }).join("");
+    }).join("") + customSection();
   }
   function suppRow(s) {
     const dots = KB.slots.map(sl => (s.slots || []).includes(sl.id) ? `<i style="--slot:${slotVar(sl.id)}" title="${esc(sl.label)}"></i>` : `<i class="off"></i>`).join("");
@@ -3053,7 +3421,7 @@ Rules:
     const sched = Engine.schedule(d);
     S.sched = sched.items;
     const res = Engine.analyze(d);
-    const labFindings = res.findings.filter(f => f.tag === "Results");
+    const labFindings = res.findings.filter(f => f.tag === "Results" || f.tag === "Blood pressure");
     const hist = res.labs;
     const head = `<header class="page-head"><div><h1>Results</h1><p class="lead">Lab values, examinations and the check-ups that are due next.</p></div>
       <div class="head-actions"><button class="btn primary" data-action="new-panel">${ICON.plus}<span>Lab results</span></button><button class="btn" data-action="new-exam">${ICON.plus}<span>Examination</span></button></div></header>`;
@@ -3065,8 +3433,8 @@ Rules:
       ${sched.items.length ? dueList(sched.items) : `<p class="muted">Nothing due right now.</p>`}
       <p class="muted small">Screening intervals follow common international guidelines; programs differ by country. Your doctor's recommendation always comes first – enter it as “next appointment” on an examination.</p>
     </section>`;
-    const findHtml = hist.size ? findingsSection(labFindings, "What your results mean", "No values outside their ranges.") : "";
-    return head + schedHtml + findHtml + markersSection(hist) + examsSection() + panelsSection();
+    const findHtml = hist.size || Store.data.bp.length ? findingsSection(labFindings, "What your results mean", "No values outside their ranges.") : "";
+    return head + schedHtml + findHtml + bpSection() + markersSection(hist) + examsSection() + panelsSection();
   }
   function spark(h) {
     const pts = h.entries.map(e => (e.canon != null ? e.canon : e.raw)).filter(v => v != null);
@@ -3111,7 +3479,7 @@ Rules:
     return `<section class="block"><h2>Examinations</h2>${ex.length ? `<ul class="rec-list">${ex.map(e => `<li><button class="rec-row" data-action="edit-exam" data-id="${esc(e.id)}">
         <span class="rec-date">${esc(U.fmtDate(e.date))}</span>
         <span class="rec-main"><span class="rec-title">${esc(examName(e))}</span>${e.summary ? `<span class="rec-sub">${esc(shorten(e.summary, 120))}</span>` : ""}</span>
-        <span class="rec-side"><span class="res res-${esc(e.result || "normal")}">${esc(RESULT[e.result] || "No findings")}</span>${e.nextDue ? `<span class="muted small">Next: ${esc(U.fmtDate(e.nextDue))}</span>` : ""}</span>
+        <span class="rec-side"><span class="res res-${esc(e.result || "normal")}">${esc(RESULT[e.result] || "No findings")}</span>${e.nextDue ? `<span class="muted small">Next: ${esc(U.fmtDate(e.nextDue))}</span>` : ""}${(e.files || []).length ? `<span class="muted small">${e.files.length} ${e.files.length === 1 ? "file" : "files"}</span>` : ""}</span>
       </button></li>`).join("")}</ul>` : `<p class="empty">No examinations yet. <button class="linklike" data-action="new-exam">Add a check-up, dental visit or screening</button></p>`}</section>`;
   }
   function panelsSection() {
@@ -3121,7 +3489,7 @@ Rules:
       const n = (p.items || []).filter(i => String(i.name || "").trim()).length;
       return `<li><button class="rec-row" data-action="edit-panel" data-id="${esc(p.id)}">
         <span class="rec-date">${esc(U.fmtDate(p.date))}</span>
-        <span class="rec-main"><span class="rec-title">${esc(p.source || "Lab report")}</span><span class="rec-sub">${n} ${n === 1 ? "value" : "values"}</span></span>
+        <span class="rec-main"><span class="rec-title">${esc(p.source || "Lab report")}</span><span class="rec-sub">${n} ${n === 1 ? "value" : "values"}${(p.files || []).length ? `, ${p.files.length} ${p.files.length === 1 ? "file" : "files"}` : ""}</span></span>
       </button></li>`;
     }).join("")}</ul></section>`;
   }
@@ -3130,18 +3498,21 @@ Rules:
   // SHEETS (supplement, lab report, examination)
   // =====================================================================
   function openSheet(kind, id) {
-    const list = kind === "supp" ? Store.data.supplements : kind === "panel" ? Store.data.labs : Store.data.exams;
+    const list = kind === "supp" ? Store.data.supplements : kind === "panel" ? Store.data.labs : kind === "bp" ? Store.data.bp : Store.data.exams;
     const existing = id && list.find(x => x.id === id);
     let draft;
     if (existing) draft = JSON.parse(JSON.stringify(existing));
     else if (kind === "supp") draft = { id: Store.uid(), brand: "", product: "", form: "Capsule", serving: "1 capsule", servingsPerDay: "1", slots: [], ingredients: [emptyIng()], purpose: "", startDate: todayLocal(), durationWeeks: "", status: "active", notes: "" };
     else if (kind === "panel") draft = { id: Store.uid(), date: todayLocal(), source: "", notes: "", items: [emptyLabItem(), emptyLabItem(), emptyLabItem()] };
-    else draft = { id: Store.uid(), date: todayLocal(), type: "General check-up", customType: "", result: "normal", summary: "", nextDue: "" };
+    else if (kind === "bp") draft = { id: Store.uid(), at: localDT(new Date()), sys: "", dia: "", pulse: "", note: "", files: [] };
+    else draft = { id: Store.uid(), date: todayLocal(), type: "General check-up", customType: "", result: "normal", summary: "", nextDue: "", files: [] };
+    if (kind !== "supp" && !Array.isArray(draft.files)) draft.files = [];
     if (kind === "supp" && !draft.ingredients.length) draft.ingredients.push(emptyIng());
     if (kind === "panel" && !draft.items.length) draft.items.push(emptyLabItem());
-    S.sheet = { kind, draft, orig: JSON.stringify(draft), isNew: !existing, ai: null, aiBusy: false, aiError: null, scanBusy: false, scanError: null };
+    S.sheet = { kind, draft, orig: JSON.stringify(draft), isNew: !existing, ai: null, aiBusy: false, aiError: null, scanBusy: false, scanError: null, keepScans: true };
     S.lastFocus = document.activeElement;
     renderSheet();
+    hydrateThumbs($("#sh-body"));
     document.body.classList.add("noscroll");
     const first = $(S.sheet.isNew ? ".sheet-body input:not([type=file]), .sheet-body select" : ".sheet-head .icon-btn");
     if (first) first.focus({ preventScroll: true });
@@ -3159,7 +3530,7 @@ Rules:
   }
   function renderSheet() {
     const sh = S.sheet;
-    const titles = { supp: ["New supplement", "Edit supplement"], panel: ["New lab results", "Edit lab results"], exam: ["New examination", "Edit examination"] };
+    const titles = { supp: ["New supplement", "Edit supplement"], panel: ["New lab results", "Edit lab results"], exam: ["New examination", "Edit examination"], bp: ["New blood pressure reading", "Edit reading"] };
     $("#sheet-root").innerHTML = `<div class="backdrop" data-action="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">
       <header class="sheet-head"><h2 id="sh-title">${titles[sh.kind][sh.isNew ? 0 : 1]}</h2>
         <button class="icon-btn" data-action="close-sheet" aria-label="Close">${ICON.close}</button></header>
@@ -3171,8 +3542,8 @@ Rules:
         <button class="btn primary" data-action="save-sheet">Save</button>
       </footer></div></div>`;
   }
-  function sheetBody() { return S.sheet.kind === "supp" ? suppBody() : S.sheet.kind === "panel" ? panelBody() : examBody(); }
-  function rerenderBody() { const b = $("#sh-body"); if (b) b.innerHTML = sheetBody(); }
+  function sheetBody() { const k = S.sheet.kind; return k === "supp" ? suppBody() : k === "panel" ? panelBody() : k === "bp" ? bpBody() : examBody(); }
+  function rerenderBody() { const b = $("#sh-body"); if (b) { b.innerHTML = sheetBody(); hydrateThumbs(b); } }
 
   function scanBox(label, accept, hint) {
     const sh = S.sheet;
@@ -3180,6 +3551,7 @@ Rules:
     return `<div class="scan">
       <label class="btn scan-btn${sh.scanBusy ? " is-busy" : ""}">${ICON.camera}<span>${label}</span><input type="file" accept="${accept}" multiple data-scan hidden${sh.scanBusy ? " disabled" : ""}></label>
       <p class="hint">${hint}</p>
+      ${sh.kind === "panel" ? `<label class="check"><input type="checkbox" data-keepscan${sh.keepScans ? " checked" : ""}> Keep the scanned pages with this report</label>` : ""}
       ${sh.scanBusy ? `<div class="ai-busy" role="status"><span class="spinner"></span>Reading …</div>` : ""}
       ${sh.scanError ? `<p class="error">${esc(sh.scanError)}</p>` : ""}
     </div>`;
@@ -3217,13 +3589,14 @@ Rules:
       <section class="ed-section" id="ed-preview">${suppPreview()}</section>
       <section class="ed-section" id="ed-ai">${suppAi()}</section>`;
   }
-  function matchInfo(ing) {
+  function matchInfo(ing, i) {
     if (!String(ing.name || "").trim()) return { cls: "", html: "" };
     const n = Engine.matchNutrient(ing.name);
-    return n ? { cls: "ok", html: `Recognized: ${esc(n.name)}` } : { cls: "unknown", html: "Not in the database – saved and assessed by the AI" };
+    if (n) return { cls: "ok", html: `Recognized: ${esc(n.name)}${n.custom ? " (your AI entry)" : ""}` };
+    return { cls: "unknown", html: "Not in the database yet." + (AI.hasKey() && i != null ? ` <button class="linklike small" data-action="ing-lookup" data-i="${i}">Research it with AI and add it</button>` : " It's saved anyway, and the AI advisor still considers it.") };
   }
   function ingRow(ing, i) {
-    const m = matchInfo(ing);
+    const m = matchInfo(ing, i);
     const units = KB.units.includes(ing.unit) ? KB.units : KB.units.concat([ing.unit]);
     return `<div class="ing-row">
       <label class="ing-name"><span class="sr-only">Ingredient</span><input list="nutrient-list" data-dbind="ingredients.${i}.name" value="${esc(ing.name)}" placeholder="Ingredient, e.g. Magnesium" autocomplete="off"></label>
@@ -3258,7 +3631,7 @@ Rules:
       const ul = n.ul ? `${UL_SHORT[n.ul.kind]} ${U.fmt(n.ul.value)} ${n.unit} a day ${n.ul.scope === "total" ? "incl. food" : "from supplements"} (${n.ul.src})${n.ul.note ? ". " + n.ul.note : ""}` : "";
       return `<details class="know" data-know="${n.id}"><summary>${esc(n.name)}</summary><dl>
         ${n.dosing ? `<dt>Dose</dt><dd>${esc(n.dosing)}</dd>` : ""}${n.timing ? `<dt>Timing</dt><dd>${esc(n.timing)}</dd>` : ""}
-        ${n.forms ? `<dt>Forms</dt><dd>${esc(n.forms)}</dd>` : ""}${ul ? `<dt>Limit</dt><dd>${esc(ul)}</dd>` : ""}${n.lab ? `<dt>Blood test</dt><dd>${esc(n.lab)}</dd>` : ""}
+        ${n.forms ? `<dt>Forms</dt><dd>${esc(n.forms)}</dd>` : ""}${ul ? `<dt>Limit</dt><dd>${esc(ul)}</dd>` : ""}${n.lab ? `<dt>Blood test</dt><dd>${esc(n.lab)}</dd>` : ""}${n.custom ? `<dt>Source</dt><dd>Researched by AI – check with a pharmacist if in doubt</dd>` : ""}
       </dl></details>`;
     }).join("");
     return `<h3>How it fits your plan</h3>
@@ -3355,7 +3728,8 @@ Rules:
         <div id="li-list" class="li-list">${d.items.map(labItemRow).join("")}</div>
         <button class="btn small" data-action="li-add">${ICON.plus}<span>Value</span></button>
       </fieldset>
-      <label class="field"><span>Notes</span><textarea data-dbind="notes" rows="2" placeholder="e.g. not fasting, had a cold">${esc(d.notes)}</textarea></label>`;
+      <label class="field"><span>Notes</span><textarea data-dbind="notes" rows="2" placeholder="e.g. not fasting, had a cold">${esc(d.notes)}</textarea></label>
+      ${filesSlot("Photos and documents", "Keep the original report here – photos or PDF.")}`;
   }
 
   // ----- examination -----
@@ -3370,7 +3744,8 @@ Rules:
       <label class="field"><span>Result</span><select data-dbind="result">${Object.keys(RESULT).map(k => opt(k, RESULT[k], d.result)).join("")}</select></label>
       <label class="field"><span>What was found or recommended?</span><textarea data-dbind="summary" rows="4" placeholder="e.g. small polyp removed, all fine otherwise">${esc(d.summary)}</textarea></label>
       <label class="field"><span>Next appointment recommended by your doctor</span><input type="date" data-dbind="nextDue" value="${esc(d.nextDue)}"></label>
-      <p class="hint">Optional. Overrides the app's standard interval for this examination.</p>`;
+      <p class="hint">Optional. Overrides the app's standard interval for this examination.</p>
+      ${filesSlot("Photos and documents", "e.g. the findings letter or report.")}`;
   }
 
   // ----- sheet input -----
@@ -3393,7 +3768,7 @@ Rules:
     if (sh.kind === "supp") {
       const m = /^ingredients\.(\d+)\.name$/.exec(path);
       if (m) {
-        const i = +m[1], ing = sh.draft.ingredients[i], info = matchInfo(ing);
+        const i = +m[1], ing = sh.draft.ingredients[i], info = matchInfo(ing, i);
         const box = $("#ing-match-" + i);
         if (box) { box.innerHTML = info.html; box.className = "ing-match " + info.cls; }
         const n = Engine.matchNutrient(ing.name);
@@ -3420,6 +3795,7 @@ Rules:
         if (box) box.innerHTML = labItemInfo(it);
       }
     } else if (sh.kind === "exam" && path === "type") rerenderBody();
+    else if (sh.kind === "bp") { const b = $("#bp-info"); if (b) b.innerHTML = bpInfo(sh.draft); }
   }
   function saveSheet() {
     const sh = S.sheet, d = sh.draft;
@@ -3434,12 +3810,19 @@ Rules:
       clean.items = clean.items.filter(i => String(i.name || "").trim()).map(i => { delete i.unitCustom; return i; });
       if (!clean.items.length) { toast("Enter at least one value.", "error"); return; }
       list = Store.data.labs;
+    } else if (sh.kind === "bp") {
+      const sy = U.parseNum(d.sys), di = U.parseNum(d.dia);
+      if (!sy || !di || sy < 60 || sy > 260 || di < 30 || di > 160 || di >= sy) { toast("Enter plausible systolic and diastolic values.", "error"); return; }
+      if (!d.at) { toast("Enter the date and time.", "error"); return; }
+      list = Store.data.bp;
     } else {
       if (!d.date) { toast("Enter the date of the examination.", "error"); return; }
       list = Store.data.exams;
     }
     const idx = list.findIndex(x => x.id === clean.id);
     if (idx >= 0) list[idx] = clean; else list.push(clean);
+    const before = (JSON.parse(sh.orig).files || []).map(f => f.id), now = (clean.files || []).map(f => f.id);
+    dropFiles(before.filter(id => !now.includes(id)));
     Store.save();
     closeSheet(true);
     toast("Saved");
@@ -3447,10 +3830,11 @@ Rules:
   }
   async function deleteSheet() {
     const sh = S.sheet;
-    const what = sh.kind === "supp" ? `“${U.suppName(sh.draft)}” will be removed. If you only stop for a while, set the status to “Paused” instead.` : sh.kind === "panel" ? "This lab report and all its values will be removed." : "This examination will be removed.";
+    const what = sh.kind === "supp" ? `“${U.suppName(sh.draft)}” will be removed. If you only stop for a while, set the status to “Paused” instead.` : sh.kind === "panel" ? "This lab report and all its values will be removed." : sh.kind === "bp" ? "This reading will be removed." : "This examination will be removed.";
     if (!(await confirmBox("Delete?", what, "Delete", true))) return;
-    const key = sh.kind === "supp" ? "supplements" : sh.kind === "panel" ? "labs" : "exams";
+    const key = sh.kind === "supp" ? "supplements" : sh.kind === "panel" ? "labs" : sh.kind === "bp" ? "bp" : "exams";
     Store.data[key] = Store.data[key].filter(x => x.id !== sh.draft.id);
+    dropFiles((sh.draft.files || []).map(f => f.id).concat((JSON.parse(sh.orig).files || []).map(f => f.id)));
     Store.save();
     closeSheet(true);
     toast("Deleted");
@@ -3530,12 +3914,271 @@ Rules:
       const list = files.slice(0, 6);
       if (!AI.canReadPdf() && list.some(f => f.type === "application/pdf")) throw new Error(`PDF files can only be read with Claude. With ${AI.providerName()}, take screenshots of the pages and select them together.`);
       const urls = [];
-      for (const f of list) urls.push(await fileToDataUrl(f, sh.kind === "panel" ? 2200 : 1600));
+      for (const f of list) urls.push(await fileToDataUrl(f, sh.kind === "supp" ? 1600 : 2200));
       const more = files.length > 6 ? " Only the first 6 images were read." : "";
-      if (sh.kind === "panel") { const r = await AI.readLabReport(urls); if (S.sheet !== sh) return; applyReport(r); toast(`${(r.items || []).length} values read – please check them.${more}`); }
-      else { const r = await AI.readLabel(urls); if (S.sheet !== sh) return; applyLabel(r); toast("Label read – please check the values." + more); }
+      if (sh.kind === "panel") {
+        const r = await AI.readLabReport(urls);
+        if (S.sheet !== sh) return;
+        applyReport(r);
+        if (sh.keepScans) for (let k = 0; k < list.length; k++) { sh.draft.files = sh.draft.files || []; sh.draft.files.push(await storeFile(list[k], urls[k])); }
+        toast(`${(r.items || []).length} values read – please check them.${more}`);
+      } else if (sh.kind === "bp") {
+        const readings = cleanReadings(await AI.readBloodPressure(urls), list);
+        if (S.sheet !== sh) return;
+        if (!readings.length) throw new Error("No blood pressure readings found in the photo.");
+        if (readings.length === 1) {
+          const x = readings[0];
+          Object.assign(sh.draft, { sys: String(x.sys), dia: String(x.dia), pulse: x.pulse ? String(x.pulse) : sh.draft.pulse, at: x.at || sh.draft.at });
+          sh.draft.files = sh.draft.files || [];
+          sh.draft.files.push(await storeFile(list[x.img], urls[x.img]));
+          toast("Reading taken from the photo – please check it.");
+        } else {
+          sh.scanBusy = false;
+          await closeSheet(true);
+          await importReadings(readings, list, urls);
+          return;
+        }
+      } else {
+        const r = await AI.readLabel(urls);
+        if (S.sheet !== sh) return;
+        applyLabel(r);
+        toast("Label read – please check the values." + more);
+      }
     } catch (e) { sh.scanError = e.message; }
     finally { sh.scanBusy = false; if (S.sheet === sh) rerenderBody(); }
+  }
+
+  // ----- files (photos, PDFs) -----
+  function allFileRefs() {
+    const s = new Set(), d = Store.data;
+    [].concat(d.labs, d.exams, d.bp).forEach(o => (o && o.files || []).forEach(f => s.add(f.id)));
+    return s;
+  }
+  function dropFiles(ids) {
+    const refs = allFileRefs();
+    Array.from(new Set(ids)).forEach(id => {
+      if (!id || refs.has(id)) return;
+      Attach.del(id).catch(() => {});
+      if (!Store.data.deletedFiles.includes(id)) Store.data.deletedFiles.push(id);
+    });
+  }
+  async function storeFile(file, dataUrl) {
+    const rec = { id: "f" + Store.uid(), mime: dataUrl.slice(5, dataUrl.indexOf(";")), name: (file && file.name) || "file", dataUrl, createdAt: new Date().toISOString() };
+    await Attach.put(rec);
+    return { id: rec.id, mime: rec.mime, name: rec.name };
+  }
+  function filesBox(legend, hint) {
+    const files = (S.sheet && S.sheet.draft.files) || [];
+    return `<fieldset class="group"><legend>${esc(legend)}</legend>
+      ${files.length ? `<div class="thumbs">${files.map((f, i) => `<div class="thumb">
+        <button class="thumb-btn" data-action="view-file" data-id="${esc(f.id)}" aria-label="Open ${esc(f.name || "file")}">${f.mime === "application/pdf" ? `<span class="thumb-pdf">PDF</span>` : `<img alt="" data-file-img="${esc(f.id)}">`}</button>
+        <button class="icon-btn thumb-del" data-action="file-del" data-i="${i}" aria-label="Remove file">${ICON.close}</button></div>`).join("")}</div>` : ""}
+      <label class="btn small">${ICON.plus}<span>Add photos or PDF</span><input type="file" accept="image/*,application/pdf" multiple data-attach hidden></label>
+      ${hint ? `<p class="hint">${esc(hint)}</p>` : ""}
+    </fieldset>`;
+  }
+  function filesSlot(legend, hint) { return `<div id="sh-files" data-legend="${esc(legend)}" data-hint="${esc(hint || "")}">${filesBox(legend, hint)}</div>`; }
+  function refreshFiles() { const box = $("#sh-files"); if (box) { box.innerHTML = filesBox(box.dataset.legend, box.dataset.hint); hydrateThumbs(box); } }
+  async function loadFile(id) {
+    let rec = await Attach.get(id);
+    if (!rec && Sync.configured()) {
+      const o = await Sync.fetchFile(id);
+      if (o) { rec = { id, mime: o.mime, name: o.name, dataUrl: o.dataUrl, createdAt: new Date().toISOString() }; await Attach.put(rec); }
+    }
+    return rec;
+  }
+  async function hydrateThumbs(root) {
+    for (const img of $$("img[data-file-img]", root || document)) {
+      try {
+        const rec = await loadFile(img.dataset.fileImg);
+        if (rec) img.src = rec.dataUrl; else img.closest(".thumb-btn").classList.add("missing");
+      } catch (e) { img.closest(".thumb-btn").classList.add("missing"); }
+    }
+  }
+  async function attachFiles(files) {
+    const sh = S.sheet;
+    if (!sh || !files.length) return;
+    try {
+      for (const f of files.slice(0, 10)) {
+        if (f.type === "application/pdf" && f.size > 10 * 1024 * 1024) { toast("PDFs can be at most 10 MB.", "error"); continue; }
+        const url = await fileToDataUrl(f, 1800);
+        sh.draft.files = sh.draft.files || [];
+        sh.draft.files.push(await storeFile(f, url));
+      }
+    } catch (e) { toast(e.message || "The file couldn't be stored.", "error"); }
+    if (S.sheet === sh) refreshFiles();
+  }
+  async function viewFile(id) {
+    let rec = null;
+    try { rec = await loadFile(id); } catch (e) { toast(e.message, "error"); return; }
+    if (!rec) { toast("This file isn't on this device. Turn on sync on the device where you added it.", "error"); return; }
+    if (rec.mime === "application/pdf") {
+      const bin = atob(rec.dataUrl.split(",")[1]), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+    $("#viewer-root").innerHTML = `<div class="viewer" data-action="close-viewer" role="dialog" aria-label="Image"><img src="${rec.dataUrl}" alt="${esc(rec.name || "")}"><button class="icon-btn viewer-close" data-action="close-viewer" aria-label="Close">${ICON.close}</button></div>`;
+  }
+
+  // ----- blood pressure -----
+  const BP_LV = { normal: "In range", aboveTarget: "High-normal", high: "High", critHigh: "Very high", low: "Low" };
+  function bpChip(lv) { return `<span class="lv lv-${lv}">${BP_LV[lv]}</span>`; }
+  function localDT(d) { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); }
+  function fmtDT(d) { return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+  function cleanReadings(r, files) {
+    const out = [];
+    (r && Array.isArray(r.readings) ? r.readings : []).forEach(x => {
+      const sys = U.parseNum(x.sys), dia = U.parseNum(x.dia), pulse = U.parseNum(x.pulse);
+      if (!sys || !dia || sys < 60 || sys > 260 || dia < 30 || dia > 160 || dia >= sys) return;
+      const img = Math.max(0, Math.min(files.length - 1, (parseInt(x.image, 10) || 1) - 1));
+      const dt = String(x.datetime || "");
+      const at = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dt) ? dt.slice(0, 16) : /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt + "T08:00" : localDT(new Date(files[img].lastModified || Date.now()));
+      out.push({ sys: Math.round(sys), dia: Math.round(dia), pulse: pulse ? Math.round(pulse) : null, at, img });
+    });
+    return out;
+  }
+  async function importReadings(readings, files, urls) {
+    const rows = readings.map(x => `<tr><td>${esc(x.at.replace("T", " "))}</td><td class="num">${x.sys}/${x.dia}</td><td class="num">${x.pulse || "–"}</td></tr>`).join("");
+    const ok = await modal({ title: `${readings.length} readings found`,
+      html: `<div class="tablewrap"><table class="hist"><thead><tr><th>When</th><th>mmHg</th><th>Pulse</th></tr></thead><tbody>${rows}</tbody></table></div><p class="small">Please check them. Readings without a date on the photo get the time the photo was taken.</p>`,
+      actions: [{ label: "Cancel", value: false }, { label: `Add ${readings.length} readings`, kind: "primary", value: true }] });
+    if (!ok) return;
+    const stored = {};
+    for (const x of readings) {
+      if (!stored[x.img]) stored[x.img] = await storeFile(files[x.img], urls[x.img]);
+      Store.data.bp.push({ id: Store.uid(), at: x.at, sys: String(x.sys), dia: String(x.dia), pulse: x.pulse ? String(x.pulse) : "", note: "From photo", files: [stored[x.img]] });
+    }
+    Store.save();
+    toast(`${readings.length} readings added`);
+    render();
+  }
+  async function bpImport(files) {
+    if (!files.length) return;
+    S.bpBusy = true; render();
+    try {
+      const list = files.slice(0, 6), urls = [];
+      for (const f of list) urls.push(await fileToDataUrl(f, 2000));
+      const readings = cleanReadings(await AI.readBloodPressure(urls), list);
+      if (!readings.length) throw new Error("No blood pressure readings found in the photo.");
+      S.bpBusy = false; render();
+      await importReadings(readings, list, urls);
+    } catch (e) { S.bpBusy = false; render(); toast(e.message, "error"); }
+  }
+  function bpInfo(d) {
+    const s = U.parseNum(d.sys), di = U.parseNum(d.dia);
+    return s && di ? bpChip(Engine.bpLevel(s, di)) + ` <span class="muted">A single reading says little – the average over several days counts.</span>` : "";
+  }
+  function bpBody() {
+    const d = S.sheet.draft;
+    return `${scanBox("Read from a photo", "image/*", "Photo of your monitor's display – or of a written log; several readings are added at once.")}
+      <div class="grid3">
+        <label class="field"><span>Systolic (mmHg)</span><input data-dbind="sys" inputmode="numeric" value="${esc(d.sys)}" placeholder="e.g. 125"></label>
+        <label class="field"><span>Diastolic (mmHg)</span><input data-dbind="dia" inputmode="numeric" value="${esc(d.dia)}" placeholder="e.g. 80"></label>
+        <label class="field"><span>Pulse (bpm)</span><input data-dbind="pulse" inputmode="numeric" value="${esc(d.pulse)}" placeholder="optional"></label>
+      </div>
+      <p class="li-match" id="bp-info">${bpInfo(d)}</p>
+      <label class="field"><span>Date and time</span><input type="datetime-local" data-dbind="at" value="${esc(d.at)}"></label>
+      <label class="field"><span>Note</span><input data-dbind="note" value="${esc(d.note)}" placeholder="e.g. left arm, after coffee, stressed"></label>
+      ${filesSlot("Photos", "e.g. the monitor's display")}`;
+  }
+  function bpChart(list) {
+    const cutoff = Date.now() - 30 * 864e5;
+    let pts = list.filter(x => x.t.getTime() >= cutoff);
+    if (pts.length < 2) pts = list.slice(-20);
+    if (pts.length < 2) return "";
+    const W = 640, H = 180, L = 36, R = 10, T = 10, B = 24;
+    const vals = pts.reduce((a, x) => a.concat([x.sys, x.dia]), [135, 85]);
+    const min = Math.floor((Math.min.apply(null, vals) - 5) / 10) * 10, max = Math.ceil((Math.max.apply(null, vals) + 5) / 10) * 10;
+    const t0 = pts[0].t.getTime(), t1 = pts[pts.length - 1].t.getTime();
+    const X = t => L + (t1 === t0 ? (W - L - R) / 2 : (t - t0) / (t1 - t0) * (W - L - R));
+    const Y = v => T + (max - v) / (max - min) * (H - T - B);
+    const path = k => pts.map((x, i) => `${i ? "L" : "M"}${X(x.t.getTime()).toFixed(1)} ${Y(x[k]).toFixed(1)}`).join(" ");
+    const dots = k => pts.map(x => `<circle cx="${X(x.t.getTime()).toFixed(1)}" cy="${Y(x[k]).toFixed(1)}" r="3"></circle>`).join("");
+    const ticks = []; for (let v = min; v <= max; v += 20) ticks.push(v);
+    const day = d => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    return `<div class="bpchart-wrap"><svg class="bpchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chart of your blood pressure readings">
+      ${ticks.map(v => `<line class="bp-grid" x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"></line><text class="bp-tick" x="${L - 6}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`).join("")}
+      <line class="bp-th" x1="${L}" x2="${W - R}" y1="${Y(135).toFixed(1)}" y2="${Y(135).toFixed(1)}"></line><line class="bp-th" x1="${L}" x2="${W - R}" y1="${Y(85).toFixed(1)}" y2="${Y(85).toFixed(1)}"></line>
+      <path class="bp-line bp-sys" d="${path("sys")}"></path><g class="bp-dots bp-sys">${dots("sys")}</g>
+      <path class="bp-line bp-dia" d="${path("dia")}"></path><g class="bp-dots bp-dia">${dots("dia")}</g>
+      <text class="bp-tick" x="${L}" y="${H - 6}">${day(pts[0].t)}</text><text class="bp-tick" x="${W - R}" y="${H - 6}" text-anchor="end">${day(pts[pts.length - 1].t)}</text>
+    </svg><div class="bp-legend"><span class="k-sys">Systolic</span><span class="k-dia">Diastolic</span><span class="k-th">Home limit 135/85</span></div></div>`;
+  }
+  function bpSection() {
+    const st = Engine.bpStats(Store.data);
+    const head = `<div class="section-head"><h2>Blood pressure at home</h2><div class="head-actions">
+      <button class="btn small" data-action="new-bp">${ICON.plus}<span>Reading</span></button>
+      ${AI.hasKey() ? `<label class="btn small${S.bpBusy ? " is-busy" : ""}">${ICON.camera}<span>From photo</span><input type="file" accept="image/*" multiple data-bpimport hidden></label>` : ""}</div></div>`;
+    const busy = S.bpBusy ? `<div class="ai-busy" role="status"><span class="spinner"></span>Reading the photo …</div>` : "";
+    if (!st.list.length) return `<section class="block">${head}${busy}<p class="empty">No readings yet. Add your home measurements${AI.hasKey() ? " – or photograph your monitor or a written log" : ""}. Measure sitting after 5 minutes of rest; before a doctor's visit, twice in the morning and evening for a week.</p></section>`;
+    const avgLine = (a, label) => a ? `<div class="bp-avg"><span class="bp-avg-label">${label}</span><span class="bp-avg-val">${Math.round(a.sys)}/${Math.round(a.dia)}</span><span class="muted small">mmHg${a.pulse ? `, pulse ${Math.round(a.pulse)}` : ""}, ${a.n} ${a.n === 1 ? "reading" : "readings"}</span>${bpChip(Engine.bpLevel(a.sys, a.dia))}</div>` : "";
+    const recent = st.list.slice().reverse();
+    const row = x => `<li><button class="rec-row" data-action="edit-bp" data-id="${esc(x.r.id)}"><span class="rec-date">${esc(fmtDT(x.t))}</span>
+      <span class="rec-main"><span class="rec-title">${x.sys}/${x.dia} mmHg${x.pulse ? ` <span class="muted small">pulse ${x.pulse}</span>` : ""}</span>${x.r.note ? `<span class="rec-sub">${esc(x.r.note)}</span>` : ""}</span>
+      <span class="rec-side">${bpChip(Engine.bpLevel(x.sys, x.dia))}${(x.r.files || []).length ? `<span class="muted small">${x.r.files.length} ${x.r.files.length === 1 ? "photo" : "photos"}</span>` : ""}</span></button></li>`;
+    return `<section class="block">${head}${busy}
+      <div class="bp-avgs">${avgLine(st.avg7, "Last 7 days")}${avgLine(st.avg30, "Last 30 days")}</div>
+      ${bpChart(st.list)}
+      <p class="muted small">At home, below 135/85 mmHg is normal and below 130/80 a common target. Measure sitting after 5 minutes of rest.</p>
+      <ul class="rec-list">${recent.slice(0, 6).map(row).join("")}</ul>
+      ${recent.length > 6 ? `<details class="more"><summary>All readings (${recent.length})</summary><ul class="rec-list">${recent.slice(6).map(row).join("")}</ul></details>` : ""}
+    </section>`;
+  }
+
+  // ----- your own ingredients (researched by AI) -----
+  function makeCustom(e, name) {
+    const s = (v, n) => String(v == null ? "" : v).slice(0, n || 400);
+    const sev = v => (["danger", "warn", "info"].includes(v) ? v : "info");
+    const arr = v => (Array.isArray(v) ? v : []);
+    return {
+      id: "c_" + Store.uid(), name: s(e.name || name, 80), unit: KB.units.includes(e.unit) ? e.unit : "mg",
+      aliases: [name].concat(arr(e.aliases)).map(a => s(a, 80)).filter(Boolean).slice(0, 12),
+      timing: s(e.timing), dosing: s(e.dosing, 600), forms: s(e.forms),
+      slots: arr(e.slots).filter(x => KB.slots.some(sl => sl.id === x)), fat: !!e.fat,
+      ul: e.upperLimit && U.parseNum(e.upperLimit.value) ? { value: U.parseNum(e.upperLimit.value), src: s(e.upperLimit.source, 60) } : null,
+      drugRules: arr(e.drugInteractions).filter(r => r && KB.drugClasses.some(c => c.id === r.class)).map(r => ({ drug: r.class, sev: sev(r.severity), text: s(r.text) })).slice(0, 10),
+      conditionRules: arr(e.conditionWarnings).filter(r => r && (KB.conditions.some(c => c.id === r.condition) || r.condition === "smoker")).map(r => ({ c: r.condition, sev: sev(r.severity), text: s(r.text) })).slice(0, 10),
+      pairs: arr(e.nutrientInteractions).filter(r => r && KB.nutrients.some(n => n.id === r.nutrient && !n.custom)).map(r => ({ other: r.nutrient, kind: r.kind, hours: r.hours, text: s(r.text) })).slice(0, 10),
+      evidence: s(e.evidence, 20), source: "ai", model: AI.modelLabel(), createdAt: new Date().toISOString()
+    };
+  }
+  async function lookupIngredient(i) {
+    const sh = S.sheet;
+    if (!sh || sh.kind !== "supp") return;
+    const ing = sh.draft.ingredients[i], name = String(ing.name || "").trim();
+    if (!name) return;
+    const box = $("#ing-match-" + i);
+    if (box) box.innerHTML = `<span class="spinner"></span>Researching ${esc(name)} …`;
+    try {
+      const e = await AI.lookupIngredient(name, ing.form);
+      if (!e || e.known === false) { if (box) box.innerHTML = "The AI couldn't identify this ingredient – check the spelling or enter the active ingredient."; return; }
+      const c = makeCustom(e, name);
+      Store.data.customNutrients.push(c);
+      Store.save();
+      Engine.setCustom(Store.data.customNutrients);
+      if (S.sheet !== sh) return;
+      if (ing.amount === "" || ing.amount == null) ing.unit = c.unit;
+      $("#ing-list").innerHTML = sh.draft.ingredients.map(ingRow).join("");
+      updateSuppPreview();
+      toast(`Added “${c.name}” to your database – check the details below.`);
+    } catch (err) { if (box) box.innerHTML = `<span class="error-text">${esc(err.message)}</span>`; }
+  }
+  function customSection() {
+    const list = Store.data.customNutrients;
+    if (!list.length) return "";
+    const sevTxt = { danger: "See a doctor", warn: "Caution", info: "Note" };
+    return `<section class="block"><h2>Ingredients you added <span class="count">${list.length}</span></h2>
+      <p class="muted small">Researched by the AI because they weren't in the built-in database. The rule check uses them like built-in entries – if in doubt, check the details with a pharmacist.</p>
+      <div class="know-list">${list.map(c => `<details class="know"><summary>${esc(c.name)} <span class="muted small">AI entry</span></summary><dl>
+        ${c.dosing ? `<dt>Dose</dt><dd>${esc(c.dosing)}</dd>` : ""}${c.timing ? `<dt>Timing</dt><dd>${esc(c.timing)}</dd>` : ""}
+        ${c.ul ? `<dt>Limit</dt><dd>${esc(U.fmt(c.ul.value) + " " + c.unit + " a day (" + (c.ul.src || "source not given") + ")")}</dd>` : ""}
+        ${(c.drugRules || []).concat(c.conditionRules || [], c.pairs || []).length ? `<dt>Interactions</dt><dd>${(c.drugRules || []).concat(c.conditionRules || []).map(r => esc((sevTxt[r.sev] || "Note") + ": " + r.text)).concat((c.pairs || []).map(p => esc(p.text))).join("<br>")}</dd>` : ""}
+        ${c.evidence ? `<dt>Evidence</dt><dd>${esc(c.evidence)}</dd>` : ""}
+        <dt>Added</dt><dd>${esc(U.fmtDate((c.createdAt || "").slice(0, 10)))}${c.model ? " – " + esc(c.model) : ""}</dd></dl>
+        <div class="r-actions"><span></span><button class="btn small danger-ghost" data-action="custom-del" data-id="${esc(c.id)}">Remove from database</button></div></details>`).join("")}</div></section>`;
   }
 
   // =====================================================================
@@ -3684,6 +4327,14 @@ Rules:
       default: return "Not connected – your data is only on this device.";
     }
   }
+  function modelSelect(key, options) {
+    const s = Store.settings;
+    let v = String(s[key] || "").trim();
+    if (v && v !== "__custom" && !options.some(o => o[0] === v)) { s[key + "Custom"] = v; s[key] = v = "__custom"; Store.saveSettings(); }
+    const cur = v || options[0][0];
+    return `<select data-sbind="${key}">${options.map(o => opt(o[0], o[1], cur)).join("")}${opt("__custom", "Other model ID …", cur)}</select>
+      ${cur === "__custom" ? `<input class="mt8" data-sbind="${key}Custom" value="${esc(s[key + "Custom"] || "")}" placeholder="Model ID" spellcheck="false" autocapitalize="off">` : ""}`;
+  }
   function viewSettings() {
     const s = Store.settings, g = s.gh, st = Sync.status;
     return `<header class="page-head"><div><h1>Settings</h1></div></header>
@@ -3700,12 +4351,10 @@ Rules:
         <label class="field"><span>Proxy address</span><input data-sbind="proxyUrl" value="${esc(s.proxyUrl)}" placeholder="https://dose-proxy-….cn-shanghai.fcapp.run" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url"></label>
         <label class="field"><span>Proxy password</span><input type="password" data-sbind="proxyToken" value="${esc(s.proxyToken)}" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
         <div class="grid2">
-          <label class="field"><span>Model for advice</span><input list="dl-text-${p}" data-sbind="${p}Model" value="${esc(s[p + "Model"])}" placeholder="${esc(P.text)}" spellcheck="false" autocapitalize="off"></label>
-          <label class="field"><span>Model for reading labels and reports</span><input list="dl-vision-${p}" data-sbind="${p}VisionModel" value="${esc(s[p + "VisionModel"])}" placeholder="${esc(P.vision)}" spellcheck="false" autocapitalize="off"></label>
+          <label class="field"><span>Model for advice</span>${modelSelect(p + "Model", P.textModels)}</label>
+          <label class="field"><span>Model for reading labels and reports</span>${modelSelect(p + "VisionModel", P.visionModels)}</label>
         </div>
-        <datalist id="dl-text-${p}">${P.textModels.map(m => `<option value="${esc(m)}"></option>`).join("")}</datalist>
-        <datalist id="dl-vision-${p}">${P.visionModels.map(m => `<option value="${esc(m)}"></option>`).join("")}</datalist>
-        <p class="hint">Leave the model fields empty to use the defaults shown. PDF reports can only be read with Claude – with ${esc(P.short)}, select photos or screenshots of the pages instead.</p>`;
+        <p class="hint">${p === "qwen" ? "Qwen3.8-Max is the newest and most capable Qwen model and also reads images. " : ""}If the app reports that a model isn't available, it may not be offered in your region yet – choose another one. PDF reports can only be read with Claude – with ${esc(P.short)}, select photos or screenshots of the pages instead.</p>`;
         })()}
         <div class="actions"><button class="btn" data-action="ai-test">Test connection</button><span id="ai-test-out" class="small" role="status"></span></div>
       </section>
@@ -3813,6 +4462,11 @@ Rules:
         { id: id(), date: ago(60), type: "Dental check-up", customType: "", result: "normal", summary: "Cleaning, no cavities.", nextDue: "" },
         { id: id(), date: ago(100), type: "Cervical screening (Pap/HPV)", customType: "", result: "normal", summary: "HPV negative.", nextDue: "" }
       ],
+      bp: [[13, 8, 132, 84, 68], [12, 20, 128, 82, 71], [11, 8, 136, 86, 66], [10, 21, 130, 83, 70], [9, 7, 127, 81, 65], [8, 20, 134, 85, 72], [7, 8, 138, 87, 69],
+        [6, 21, 131, 84, 70], [5, 7, 129, 82, 66], [4, 20, 136, 86, 73], [3, 8, 133, 85, 67], [2, 21, 128, 81, 70], [1, 7, 135, 86, 68]].map(([dAgo, h, sys, dia, pulse]) => {
+        const t = new Date(); t.setDate(t.getDate() - dAgo); t.setHours(h, 15, 0, 0);
+        return { id: id(), at: localDT(t), sys: String(sys), dia: String(dia), pulse: String(pulse), note: "", files: [] };
+      }),
       reports: []
     };
   }
@@ -3834,6 +4488,18 @@ Rules:
       case "new-exam": openSheet("exam", null); break;
       case "edit-exam": openSheet("exam", el.dataset.id); break;
       case "close-sheet": closeSheet(false); break;
+      case "new-bp": openSheet("bp", null); break;
+      case "edit-bp": openSheet("bp", el.dataset.id); break;
+      case "view-file": viewFile(el.dataset.id); break;
+      case "close-viewer": $("#viewer-root").innerHTML = ""; break;
+      case "file-del": if (sh) { sh.draft.files.splice(+el.dataset.i, 1); refreshFiles(); } break;
+      case "ing-lookup": lookupIngredient(+el.dataset.i); break;
+      case "custom-del": {
+        if (!(await confirmBox("Remove ingredient?", "It's removed from your database. Supplements that contain it keep the entry, but it's no longer checked.", "Remove", true))) return;
+        Store.data.customNutrients = Store.data.customNutrients.filter(c => c.id !== el.dataset.id);
+        Store.save(); render();
+        break;
+      }
       case "save-sheet": saveSheet(); break;
       case "delete-sheet": deleteSheet(); break;
       case "ai-check": aiCheck(); break;
@@ -3921,18 +4587,28 @@ Rules:
       setPath(Store.settings, p, el.value);
       Store.saveSettings();
       if (p === "gh.owner" || p === "gh.repo") Store.resetSync();
-      if (p === "model" || p === "aiProvider") render();
+      if (p === "model" || p === "aiProvider" || /Model$/.test(p)) render();
     } else if (el.id === "ask-text") {
       S.askDraft = el.value;
     } else if (el.matches("[data-scan]")) {
       const fs = Array.from(el.files || []); el.value = ""; scanFiles(fs);
+    } else if (el.matches("[data-attach]")) {
+      const fs = Array.from(el.files || []); el.value = ""; attachFiles(fs);
+    } else if (el.matches("[data-keepscan]")) {
+      if (S.sheet) S.sheet.keepScans = el.checked;
+    } else if (el.matches("[data-bpimport]")) {
+      const fs = Array.from(el.files || []); el.value = ""; bpImport(fs);
     } else if (el.matches("[data-import]")) {
       const f = el.files && el.files[0]; el.value = ""; importData(f);
     }
   }
   document.addEventListener("input", onField);
   document.addEventListener("change", onField);
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && S.sheet && !$("#modal-root").innerHTML) { e.preventDefault(); closeSheet(false); } });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if ($("#viewer-root").innerHTML) { $("#viewer-root").innerHTML = ""; return; }
+    if (S.sheet && !$("#modal-root").innerHTML) { e.preventDefault(); closeSheet(false); }
+  });
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushSave(); });
   window.addEventListener("pagehide", flushSave);
   window.addEventListener("hashchange", () => { flushSave(); render(); window.scrollTo(0, 0); });
@@ -3949,8 +4625,10 @@ Rules:
       <datalist id="marker-list">${KB.markers.map(m => `<option value="${esc(m.name)}"></option>`).join("")}</datalist>
       <datalist id="labunit-list">${units.map(u => `<option value="${esc(u)}"></option>`).join("")}</datalist>`;
     document.body.appendChild(dl);
+    const vr = document.createElement("div"); vr.id = "viewer-root"; document.body.appendChild(vr);
     $("#nav").innerHTML = navHtml();
     render();
+    Attach.gc(allFileRefs()).catch(() => {});
     Sync.onStatus(updateSyncUi);
     Sync.onConflict = ({ local, remote }) => modal({
       title: "Two different versions",

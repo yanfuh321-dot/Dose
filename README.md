@@ -4,7 +4,7 @@ Dose is a private web app for your health routine:
 
 - **Today** – your daily supplement plan by time of day, notes on amounts, timing and interactions, and what's due next.
 - **Supplements** – every product with brand, ingredients, dose, timing, start date and planned duration. When you add one, you instantly see how it fits with your other supplements, medication and results.
-- **Results** – lab reports (with history and trends) and examinations. Dose interprets your values, suggests what to take or change, and builds a schedule of follow-up tests, supplement monitoring and age-appropriate screenings.
+- **Results** – lab reports (with history and trends), examinations with photos and documents, and your home blood pressure readings with averages and a chart. Dose interprets your values, suggests what to take or change, and builds a schedule of follow-up tests, supplement monitoring and age-appropriate screenings.
 - **Advisor** – optional AI (Claude) that knows your full picture: ask a question, review your results or check your whole plan.
 
 Your data stays in your browser. Optional sync stores it **encrypted** in a private GitHub repository.
@@ -19,6 +19,8 @@ Your data stays in your browser. Optional sync stores it **encrypted** in a priv
 | `manifest.webmanifest`, `icon-*.png`, `icon.svg` | Icon and “Add to Home Screen” |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are (hidden file – fine if it's missing) |
 | `README.md` | This guide |
+
+The separate folder `dose-proxy` (only needed for Qwen or DeepSeek) does **not** go into the GitHub repository – it's for Alibaba Cloud Function Compute.
 
 ---
 
@@ -51,6 +53,10 @@ Each device keeps its own data until you set up sync (step 4).
 
 **Privacy:** only when you press an AI button are your profile, supplements and results sent to Anthropic's API. The key lives in your browser, so don't enter it on shared computers.
 
+### Using Qwen or DeepSeek instead (e.g. in China)
+
+Anthropic's API isn't available in mainland China. Dose can use **Qwen** (Alibaba Cloud Model Studio) or **DeepSeek** instead. Because these providers don't accept requests straight from a browser, you set up a small proxy function in your Alibaba Cloud account once – the step-by-step guide is in **`dose-proxy/PROXY.md`**. Then choose the provider under **Settings → AI advisor** and enter the proxy address and password.
+
 ## 4. Sync between phone and computer (optional)
 
 **a) Create a private data repository**
@@ -74,11 +80,14 @@ How it works: your data is encrypted in the browser (AES-256) before upload, so 
 
 ## Tips
 
-- **Supplements:** for minerals, enter the elemental amount (“of which magnesium”), not the compound. For omega-3, enter EPA and DHA separately. With an API key you can photograph the label instead of typing.
-- **Lab results:** add one report per blood test date. Enter your lab's reference range when it's printed – it takes priority over the app's general ranges. With an API key you can scan the report (photo or PDF); Chinese and German reports work too.
+- **Supplements:** for minerals, enter the elemental amount (“of which magnesium”), not the compound. For omega-3, enter EPA and DHA separately. With the AI set up you can photograph the label instead of typing.
+- **Lab results:** add one report per blood test date. Enter your lab's reference range when it's printed – it takes priority over the app's general ranges. With the AI set up you can scan the report – select several pages at once. Claude reads photos and PDFs; with Qwen or DeepSeek use photos or screenshots. Chinese and German reports work too.
 - **Units:** pick the unit for each value from the list (e.g. mmol/L or mg/dL, µmol/L or mg/dL, g/L or g/dL). New values start with SI units, as used in China and Europe – switch to conventional US units under **Profile → Lab units**. Values from different countries are converted, so trends and ratings still work. If your report uses a unit the app doesn't know, choose *Other unit…* and enter the lab's reference range – the value is then rated with that range.
 - **Chinese test names** such as 铁蛋白, 低密度脂蛋白胆固醇, 谷丙转氨酶 or 25-羟基维生素D are recognized, as are common check-up (体检) values like urea, bilirubin, albumin, MCH/MCHC, ApoB and cystatin C.
 - **Examinations:** if your doctor gives you a date for the next check, enter it as *Next appointment* – it overrides the standard interval.
+- **Photos and documents:** add photos or PDFs to any lab report or examination (*Add photos or PDF*). Scanned report pages are kept automatically. Files are stored in your browser's file storage and – with sync – encrypted in your data repository; deleting them in the app also removes them there.
+- **Home blood pressure:** under Results → *Blood pressure at home*, add readings by hand or photograph your monitor's display or a written log (*From photo*). Dose shows 7- and 30-day averages; at home, below 135/85 mmHg counts as normal.
+- **Ingredients that aren't in the database:** in the supplement editor, tap *Research it with AI and add it*. The AI researches dosing, timing and interactions, and the rule check then treats it like a built-in entry. You'll find these entries at the bottom of *Supplements*, where you can remove them.
 - **Year of birth and sex** in your profile decide which screenings appear.
 - **Calendar:** each due item has a button that downloads a calendar entry (.ics).
 
