@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https: http://localhost:* http://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://accounts.google.com; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https: http://localhost:* http://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <title>Dose</title>
@@ -609,6 +609,18 @@ path.bp-sys { stroke: var(--s-abend); } path.bp-dia { stroke: var(--s-schlaf); }
 .bp-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-top: 4px; }
 .bp-legend span::before { content: ""; display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .k-sys::before { background: var(--s-abend); } .k-dia::before { background: var(--s-schlaf); } .k-th::before { background: var(--warn); }
+
+/* ---------- v5: context, follow-ups, Drive ---------- */
+.ctx-chips { margin: -4px 0 4px; }
+.extra-ctx { max-width: 820px; margin-top: 18px; }
+.fu { border-top: 1px dashed var(--line); margin: 6px 16px 0; padding-top: 8px; }
+.fu .r-q { margin: 6px 0; }
+.fu .md { padding: 0; }
+.fu-form { display: grid; gap: 8px; padding: 8px 16px 12px; }
+.fu-form .btn { justify-self: start; }
+.drive-sum p { margin: 0 0 6px; }
+#drive-status:empty { display: none; }
+#drive-status { margin-bottom: 14px; }
 
 </style>
 </head>
@@ -2308,7 +2320,7 @@ window.KB = {
     return { birthYear: "", sex: "", heightCm: "", weightKg: "", conditions: [], conditionsText: "", medications: [], allergies: "",
       diet: "", dietNotes: "", activity: "", sport: "", sleepHours: "", stress: "", smoking: "", alcohol: "", goals: [], goalsText: "", labUnits: "si" };
   }
-  function emptyData() { return { version: 3, meta: { updatedAt: null }, profile: emptyProfile(), supplements: [], labs: [], exams: [], bp: [], customNutrients: [], deletedFiles: [], reports: [] }; }
+  function emptyData() { return { version: 3, meta: { updatedAt: null }, profile: emptyProfile(), supplements: [], labs: [], exams: [], bp: [], customNutrients: [], deletedFiles: [], driveDone: {}, reports: [] }; }
   function normalize(d) {
     const out = emptyData();
     if (!d || typeof d !== "object") return out;
@@ -2339,6 +2351,7 @@ window.KB = {
     out.bp.forEach(r => { if (!r.id) r.id = uid(); });
     out.customNutrients = Array.isArray(d.customNutrients) ? d.customNutrients : [];
     out.deletedFiles = Array.isArray(d.deletedFiles) ? d.deletedFiles : [];
+    out.driveDone = d.driveDone && typeof d.driveDone === "object" && !Array.isArray(d.driveDone) ? d.driveDone : {};
     out.reports = Array.isArray(d.reports) ? d.reports : [];
     return out;
   }
@@ -2353,6 +2366,7 @@ window.KB = {
       this.data = normalize(d);
       this.settings = Object.assign({ apiKey: "", model: "claude-sonnet-5-5", customModel: "", aiProvider: "claude", proxyUrl: "", proxyToken: "", qwenModel: "", qwenVisionModel: "", deepseekModel: "", deepseekVisionModel: "" }, s || {});
       this.settings.gh = Object.assign({}, defaultsGh, (s && s.gh) || {});
+      this.settings.drive = Object.assign({ clientId: "", folder: "" }, (s && s.drive) || {});
       return this;
     },
     save(opts) {
@@ -2676,6 +2690,159 @@ window.KB = {
 </script>
 <script>
 /* =====================================================================
+   GOOGLE DRIVE – reads lab and examination reports from one folder.
+   Read-only access; the files go from Drive to this browser and on to
+   your AI provider. Nothing is stored at Google by this app.
+   ===================================================================== */
+(function () {
+  const SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+  let loading = null, client = null, clientFor = "", token = null, tokenExp = 0, pending = null;
+  function cfg() { return Store.settings.drive || {}; }
+  function folderId() {
+    const v = String(cfg().folder || "").trim();
+    const m = /folders\/([A-Za-z0-9_-]{10,})/.exec(v) || /[?&]id=([A-Za-z0-9_-]{10,})/.exec(v);
+    if (m) return m[1];
+    return /^[A-Za-z0-9_-]{10,}$/.test(v) ? v : "";
+  }
+  function configured() { return !!(String(cfg().clientId || "").trim() && folderId()); }
+  function ready() { return !!(window.google && google.accounts && google.accounts.oauth2); }
+  function load() {
+    if (ready()) return Promise.resolve();
+    if (loading) return loading;
+    loading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://accounts.google.com/gsi/client";
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => { loading = null; reject(new Error("Google sign-in couldn't be loaded. Check your internet connection – in mainland China a VPN is needed.")); };
+      document.head.appendChild(s);
+    });
+    return loading;
+  }
+  // Must be called directly from a tap, otherwise the browser blocks the sign-in window.
+  function getToken() {
+    if (token && Date.now() < tokenExp - 60000) return Promise.resolve(token);
+    if (!ready()) { load().catch(() => {}); return Promise.reject(new Error("Google sign-in is still loading – try again in a few seconds.")); }
+    const id = String(cfg().clientId || "").trim();
+    if (!id) return Promise.reject(new Error("Add your OAuth client ID under Settings → Google Drive first."));
+    if (!client || clientFor !== id) {
+      clientFor = id;
+      client = google.accounts.oauth2.initTokenClient({
+        client_id: id, scope: SCOPE,
+        callback: r => {
+          const p = pending; pending = null;
+          if (!p) return;
+          if (r && r.access_token) { token = r.access_token; tokenExp = Date.now() + (Number(r.expires_in) || 3600) * 1000; p.resolve(token); }
+          else p.reject(new Error("Google didn't grant access" + (r && r.error ? " (" + r.error + ")" : "") + "."));
+        },
+        error_callback: e => {
+          const p = pending; pending = null;
+          if (!p) return;
+          const t = e && e.type;
+          p.reject(new Error(t === "popup_closed" ? "The Google sign-in window was closed." : t === "popup_failed_to_open" ? "The Google sign-in window was blocked – allow pop-ups for this site." : "Google sign-in failed."));
+        }
+      });
+    }
+    return new Promise((resolve, reject) => { pending = { resolve, reject }; client.requestAccessToken({ prompt: "" }); });
+  }
+  async function api(path) {
+    const t = await getToken();
+    let res;
+    try { res = await fetch("https://www.googleapis.com/drive/v3/" + path, { headers: { Authorization: "Bearer " + t } }); }
+    catch (e) { throw new Error("Google Drive isn't reachable. Check your internet connection (VPN)."); }
+    if (res.status === 401) { token = null; throw new Error("Google access expired – tap again to sign in."); }
+    if (res.status === 403) {
+      let m = ""; try { m = (await res.json()).error.message; } catch (e) { m = ""; }
+      throw new Error("Google Drive refused access" + (m ? ": " + m : "") + ". Check that the Google Drive API is enabled in your Google Cloud project.");
+    }
+    if (res.status === 404) throw new Error("The Drive folder wasn't found. Check the folder link under Settings → Google Drive.");
+    if (!res.ok) throw new Error("Google Drive returned error " + res.status + ".");
+    return res;
+  }
+  async function folderInfo() { return (await api(`files/${folderId()}?fields=id,name,mimeType&supportsAllDrives=true`)).json(); }
+  const READABLE = /^(application\/pdf|image\/(jpeg|png|webp|gif))$/;
+  async function listAll() {
+    const files = [], skipped = [], queue = [{ id: folderId(), path: "", d: 0 }], seen = new Set();
+    while (queue.length && files.length < 500) {
+      const { id, path, d } = queue.shift();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      let pageToken = "";
+      do {
+        const q = encodeURIComponent(`'${id}' in parents and trashed = false`);
+        const r = await (await api(`files?q=${q}&fields=nextPageToken,files(id,name,mimeType,modifiedTime,size)&pageSize=200&supportsAllDrives=true&includeItemsFromAllDrives=true${pageToken ? "&pageToken=" + encodeURIComponent(pageToken) : ""}`)).json();
+        (r.files || []).forEach(f => {
+          if (f.mimeType === "application/vnd.google-apps.folder") { if (d < 3) queue.push({ id: f.id, path: path + f.name + "/", d: d + 1 }); }
+          else if (READABLE.test(f.mimeType)) files.push(Object.assign(f, { path: path + f.name }));
+          else skipped.push(path + f.name);
+        });
+        pageToken = r.nextPageToken || "";
+      } while (pageToken);
+    }
+    return { files, skipped };
+  }
+  async function download(f) {
+    if (Number(f.size) > 20 * 1024 * 1024) throw new Error("larger than 20 MB");
+    const blob = await (await api(`files/${f.id}?alt=media&supportsAllDrives=true`)).blob();
+    return new File([blob], f.name, { type: f.mimeType, lastModified: Date.parse(f.modifiedTime) || Date.now() });
+  }
+  function signOut() {
+    if (token && ready()) { try { google.accounts.oauth2.revoke(token, () => {}); } catch (e) { /* ignore */ } }
+    token = null; tokenExp = 0;
+  }
+  window.Drive = { configured, folderId, load, getToken, folderInfo, listAll, download, signOut };
+})();
+
+</script>
+<script>
+/* =====================================================================
+   PDF → PAGE IMAGES – lets Qwen and DeepSeek read PDF reports.
+   pdf.js is loaded only when needed; the PDF never leaves your browser
+   for this step.
+   ===================================================================== */
+(function () {
+  const BASE = "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.6.205/";
+  let libP = null;
+  function lib() {
+    if (!libP) {
+      libP = import(BASE + "legacy/build/pdf.min.mjs").then(m => { m.GlobalWorkerOptions.workerSrc = BASE + "legacy/build/pdf.worker.min.mjs"; return m; })
+        .catch(() => { libP = null; throw new Error("The PDF reader couldn't be loaded. Check your internet connection (VPN) and try again."); });
+    }
+    return libP;
+  }
+  function bytes(dataUrl) {
+    const b = atob(dataUrl.split(",")[1]), u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  }
+  async function toImages(dataUrl, maxPages, maxDim) {
+    const pdfjs = await lib();
+    let doc;
+    try { doc = await pdfjs.getDocument({ data: bytes(dataUrl), isEvalSupported: false, cMapUrl: BASE + "cmaps/", cMapPacked: true, standardFontDataUrl: BASE + "standard_fonts/" }).promise; }
+    catch (e) { throw new Error(/password/i.test(String(e && e.message)) ? "The PDF is password-protected." : "The PDF couldn't be opened."); }
+    const n = Math.min(doc.numPages, Math.max(1, maxPages || 6)), out = [];
+    for (let i = 1; i <= n; i++) {
+      const page = await doc.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: Math.min(3, (maxDim || 2000) / Math.max(base.width, base.height)) });
+      const c = document.createElement("canvas");
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      out.push(c.toDataURL("image/jpeg", 0.9));
+      page.cleanup();
+    }
+    const pages = doc.numPages;
+    await doc.destroy();
+    return { images: out, pages };
+  }
+  window.PdfImg = { toImages };
+})();
+
+</script>
+<script>
+/* =====================================================================
    MARKDOWN – kleine, sichere Darstellung der KI-Antworten
    ===================================================================== */
 (function () {
@@ -2800,7 +2967,7 @@ window.KB = {
     return content.map(b => {
       if (b.type === "text") return { type: "text", text: b.text };
       if (b.type === "image") return { type: "image_url", image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } };
-      throw new Error("PDF files can only be read with Claude. Take screenshots of the pages instead.");
+      throw new Error("This file type can't be sent to this AI provider.");
     });
   }
   function compatError(status, j, raw, name, modelId) {
@@ -2810,7 +2977,8 @@ window.KB = {
     if (err.source === "proxy") return new Error("Proxy: " + m);
     if (/enable_thinking/i.test(m)) return Object.assign(new Error(m), { retryNoThinking: true });
     if (status === 401 || /invalid_api_key|api.?key/i.test(code)) return new Error(`${name} rejected the API key stored in your proxy. Check the environment variable in Function Compute.`);
-    if (status === 402 || /insufficient|balance|arrearage/i.test(m + " " + code)) return new Error(`Your ${name} account has no credit left. Top it up in the provider's console.`);
+    if (/FreeTierOnly/i.test(m + " " + code)) return new Error(`The free quota for “${modelId}” is used up. Top up your Alibaba Cloud account and switch off “免费额度用完即停” for this model in Model Studio – or choose another model under Settings.`);
+    if (status === 402 || /insufficient|balance|arrearage/i.test(m + " " + code)) return new Error(`Your ${name} account has no credit left. Top it up – with Alibaba Cloud it can take up to 30 minutes until it works again.`);
     if (/data_inspection|inappropriate/i.test(m + " " + code)) return new Error(`${name}'s content filter blocked this request. Try rephrasing it.`);
     if (status === 429) return new Error("Too many requests in a short time. Wait a moment and try again.");
     if (status === 404 || /model/i.test(m + " " + code)) return new Error(`The model “${modelId}” isn't available${m ? " (" + m + ")" : ""}. Choose another one under Settings.`);
@@ -2975,10 +3143,13 @@ window.KB = {
       lines.push(`- ${h.name}${h.marker ? " (app reference " + (ref ? (ref[0] ?? "–") + "–" + (ref[1] ?? "–") : "–") + " " + h.marker.unit + ")" : ""}: ${ents.join("; ")}`);
     });
     const exams = (data.exams || []).slice().sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1)).map(e =>
-      `- ${e.date || "no date"}: ${e.type === "Other" ? (e.customType || "Other") : e.type} – ${e.result || "no result"}${e.summary ? ": " + e.summary : ""}${e.nextDue ? " (next recommended: " + e.nextDue + ")" : ""}`);
+      `- ${e.date || "no date"}: ${e.type === "Other" ? (e.customType || "Other") : e.type} – ${e.result || "no result"}${e.summary ? ": " + e.summary : ""}${e.nextDue ? " (next recommended: " + e.nextDue + ")" : ""}${e.notes ? " Context: " + e.notes : ""}`);
+    const ctx = (data.labs || []).filter(p => String(p.notes || "").trim()).sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1))
+      .map(p => `- ${p.date || "no date"}${p.source ? " (" + p.source + ")" : ""}: ${String(p.notes).trim()}`);
     const sched = Engine.schedule(data).items.map(i => `- ${i.title}: ${i.status}, due ${i.due.toISOString().slice(0, 10)} – ${i.why}`);
     return [
       "## Lab results and measurements", lines.length ? lines.join("\n") : "- none entered",
+      ctx.length ? "## Context for lab tests (from me)\n" + ctx.join("\n") : "",
       "## Examinations", exams.length ? exams.join("\n") : "- none entered",
       "## Check-up schedule computed by the app", sched.length ? sched.join("\n") : "- nothing due"
     ].join("\n\n");
@@ -3021,8 +3192,9 @@ Principles:
 
   const ask = (prompt, maxTokens) => call({ system: SYSTEM, messages: [{ role: "user", content: prompt }], maxTokens: maxTokens || 6000 });
 
-  function analyzePlan(data) {
-    return ask(`${buildContext(data)}
+  const extraBlock = x => (x && String(x).trim() ? "\n\n## Additional context from me\n" + String(x).trim() : "");
+  function analyzePlan(data, extra) {
+    return ask(`${buildContext(data)}${extraBlock(extra)}
 
 ---
 Review my current supplement plan. Structure:
@@ -3049,8 +3221,8 @@ Structure:
 ## Changes to my current plan
 ## How I'll know it works (including tests and time frame)`);
   }
-  function reviewResults(data) {
-    return ask(`${buildContext(data)}
+  function reviewResults(data, extra) {
+    return ask(`${buildContext(data)}${extraBlock(extra)}
 
 ---
 Review my lab results and examinations and tell me what to do. Structure:
@@ -3170,9 +3342,43 @@ Rules:
     });
     return parseJson(text, "The photo couldn't be read reliably. Try a sharper photo of the display.");
   }
+  async function readDocument(dataUrl) {
+    const text = await call({
+      system: "You extract data from medical documents and answer with valid JSON only.",
+      messages: [{ role: "user", content: fileBlocks(dataUrl).concat([{ type: "text", text: `These images are the pages of one document. It may be in Chinese, German, English or another language. Decide what it is and extract the data.
+Answer only with a JSON object, no Markdown:
+{"kind": "lab"|"examination"|"other", "date": "YYYY-MM-DD"|null, "source": string|null,
+ "items": [{"name": string, "value": string, "unit": string|null, "refLow": string|null, "refHigh": string|null}],
+ "exam": {"type": string, "result": "normal"|"finding"|"followup", "summary": string, "nextDue": "YYYY-MM-DD"|null}|null}
+Rules:
+- "lab": lab test results with measured values (blood, urine and similar) – fill "items".
+- "examination": a report about an examination or procedure (ultrasound, ECG, X-ray, colonoscopy, dental, eye, skin check, a check-up letter …) – fill "exam". "type" must be one of: ${KB.examTypes.join(", ")}. "summary": the key findings and recommendations in 1–4 English sentences. "result": normal = nothing relevant found, finding = something was found, followup = a follow-up or treatment is recommended. "nextDue": only if the document recommends when to check again (turn an interval into a date counted from the document date).
+- A check-up report with lab values and examination findings gets both "items" and "exam".
+- "other": not a medical report – leave "items" empty and "exam" null.
+- "date" is the date of the sample or examination; "source" is the hospital, lab or practice.
+- Lab items: common English test names (e.g. "Vitamin D (25-OH)", "Ferritin", "Hemoglobin", "LDL cholesterol", "ALT (GPT)"); "value" as printed with a decimal point (keep "<" or ">"); "unit" in standard Latin notation exactly as the lab used it, without converting (e.g. "mmol/L", "µmol/L", "g/L", "10^9/L", "U/L"); split the reference range into refLow and refHigh (null for an open end).
+- Skip pure text comments. Don't guess unreadable values.` }]) }],
+      maxTokens: 5000, vision: true
+    });
+    return parseJson(text, "The document couldn't be read reliably.");
+  }
+  function followUp(data, report, text) {
+    const earlier = [report.content].concat((report.followups || []).map(f => `My follow-up: ${f.question}\n\nYour answer:\n${f.content}`)).join("\n\n---\n\n");
+    return ask(`${buildContext(data)}
+
+---
+Earlier you wrote this for me (“${report.title}”):
+
+${earlier}
+
+---
+New context or follow-up question from me: """${text}"""
+
+Take this into account. If it changes your earlier assessment, say exactly what changes and why; answer my question if I asked one. Don't repeat what stays the same. Keep it short.`, 4000);
+  }
   function test() { return call({ system: "Answer with exactly one word.", messages: [{ role: "user", content: "Say 'Connected'." }], maxTokens: 300 }); }
 
-  window.AI = { MODELS, PROVIDERS, lookupIngredient, readBloodPressure, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
+  window.AI = { MODELS, PROVIDERS, lookupIngredient, readBloodPressure, readDocument, followUp, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
 })();
 
 </script>
@@ -3191,7 +3397,7 @@ Rules:
   const UL_SHORT = { UL: "Upper limit", safe: "Safe level", guide: "Guide" };
   const STATUS = { urgent: "See doctor soon", overdue: "Overdue", due: "Due now", soon: "Coming up", planned: "Planned" };
   const RESULT = { normal: "No findings", finding: "Findings", followup: "Follow-up needed" };
-  const S = { route: "today", sheet: null, busy: null, aiError: null, openReport: null, askDraft: "", saveTimer: null, pvTimer: null,
+  const S = { route: "today", sheet: null, busy: null, aiError: null, openReport: null, askDraft: "", extraCtx: "", fuDraft: {}, fuBusy: null, fuError: null, driveBusy: null, driveSummary: null, saveTimer: null, pvTimer: null,
     introPlayed: false, lastFocus: null, sched: [] };
 
   const ICON = {
@@ -3204,6 +3410,7 @@ Rules:
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>',
     plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    drive: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4h7l5.5 9.5-3.5 6H6.5L3 13.5z"/><path d="M8.5 4l5.5 9.5H3M15.5 4L10 13.5M14 13.5l3.5 6"/></svg>',
     calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>'
   };
   const NAV = [["today", "Today"], ["supplements", "Supplements"], ["results", "Results"], ["advisor", "Advisor"], ["profile", "Profile"], ["settings", "Settings"]];
@@ -3480,7 +3687,7 @@ Rules:
     const labFindings = res.findings.filter(f => f.tag === "Results" || f.tag === "Blood pressure");
     const hist = res.labs;
     const head = `<header class="page-head"><div><h1>Results</h1><p class="lead">Lab values, examinations and the check-ups that are due next.</p></div>
-      <div class="head-actions"><button class="btn primary" data-action="new-panel">${ICON.plus}<span>Lab results</span></button><button class="btn" data-action="new-exam">${ICON.plus}<span>Examination</span></button></div></header>`;
+      <div class="head-actions"><button class="btn primary" data-action="new-panel">${ICON.plus}<span>Lab results</span></button><button class="btn" data-action="new-exam">${ICON.plus}<span>Examination</span></button>${Drive.configured() ? `<button class="btn" data-action="drive-import"${S.driveBusy ? " disabled" : ""}>${ICON.drive}<span>From Drive</span></button>` : ""}</div></header>`;
     const missing = [];
     if (sched.missingAge) missing.push("year of birth");
     if (sched.missingSex) missing.push("sex");
@@ -3490,7 +3697,7 @@ Rules:
       <p class="muted small">Screening intervals follow common international guidelines; programs differ by country. Your doctor's recommendation always comes first – enter it as “next appointment” on an examination.</p>
     </section>`;
     const findHtml = hist.size || Store.data.bp.length ? findingsSection(labFindings, "What your results mean", "No values outside their ranges.") : "";
-    return head + schedHtml + findHtml + bpSection() + markersSection(hist) + examsSection() + panelsSection();
+    return head + driveStatus() + schedHtml + findHtml + bpSection() + markersSection(hist) + examsSection() + panelsSection();
   }
   function spark(h) {
     const pts = h.entries.map(e => (e.canon != null ? e.canon : e.raw)).filter(v => v != null);
@@ -3535,7 +3742,7 @@ Rules:
     return `<section class="block"><h2>Examinations</h2>${ex.length ? `<ul class="rec-list">${ex.map(e => `<li><button class="rec-row" data-action="edit-exam" data-id="${esc(e.id)}">
         <span class="rec-date">${esc(U.fmtDate(e.date))}</span>
         <span class="rec-main"><span class="rec-title">${esc(examName(e))}</span>${e.summary ? `<span class="rec-sub">${esc(shorten(e.summary, 120))}</span>` : ""}</span>
-        <span class="rec-side"><span class="res res-${esc(e.result || "normal")}">${esc(RESULT[e.result] || "No findings")}</span>${e.nextDue ? `<span class="muted small">Next: ${esc(U.fmtDate(e.nextDue))}</span>` : ""}${(e.files || []).length ? `<span class="muted small">${e.files.length} ${e.files.length === 1 ? "file" : "files"}</span>` : ""}</span>
+        <span class="rec-side"><span class="res res-${esc(e.result || "normal")}">${esc(RESULT[e.result] || "No findings")}</span>${e.nextDue ? `<span class="muted small">Next: ${esc(U.fmtDate(e.nextDue))}</span>` : ""}${(e.files || []).length ? `<span class="muted small">${e.files.length} ${e.files.length === 1 ? "file" : "files"}</span>` : ""}${e.review ? `<span class="res res-followup">Imported – please check</span>` : ""}</span>
       </button></li>`).join("")}</ul>` : `<p class="empty">No examinations yet. <button class="linklike" data-action="new-exam">Add a check-up, dental visit or screening</button></p>`}</section>`;
   }
   function panelsSection() {
@@ -3545,7 +3752,7 @@ Rules:
       const n = (p.items || []).filter(i => String(i.name || "").trim()).length;
       return `<li><button class="rec-row" data-action="edit-panel" data-id="${esc(p.id)}">
         <span class="rec-date">${esc(U.fmtDate(p.date))}</span>
-        <span class="rec-main"><span class="rec-title">${esc(p.source || "Lab report")}</span><span class="rec-sub">${n} ${n === 1 ? "value" : "values"}${(p.files || []).length ? `, ${p.files.length} ${p.files.length === 1 ? "file" : "files"}` : ""}</span></span>
+        <span class="rec-main"><span class="rec-title">${esc(p.source || "Lab report")}</span><span class="rec-sub">${n} ${n === 1 ? "value" : "values"}${(p.files || []).length ? `, ${p.files.length} ${p.files.length === 1 ? "file" : "files"}` : ""}${p.notes ? ` – ${esc(shorten(p.notes, 70))}` : ""}</span></span>${p.review ? `<span class="rec-side"><span class="res res-followup">Imported – please check</span></span>` : ""}
       </button></li>`;
     }).join("")}</ul></section>`;
   }
@@ -3561,7 +3768,7 @@ Rules:
     else if (kind === "supp") draft = { id: Store.uid(), brand: "", product: "", form: "Capsule", serving: "1 capsule", servingsPerDay: "1", slots: [], ingredients: [emptyIng()], purpose: "", startDate: todayLocal(), durationWeeks: "", status: "active", notes: "" };
     else if (kind === "panel") draft = { id: Store.uid(), date: todayLocal(), source: "", notes: "", items: [emptyLabItem(), emptyLabItem(), emptyLabItem()] };
     else if (kind === "bp") draft = { id: Store.uid(), at: localDT(new Date()), sys: "", dia: "", pulse: "", note: "", files: [] };
-    else draft = { id: Store.uid(), date: todayLocal(), type: "General check-up", customType: "", result: "normal", summary: "", nextDue: "", files: [] };
+    else draft = { id: Store.uid(), date: todayLocal(), type: "General check-up", customType: "", result: "normal", summary: "", nextDue: "", notes: "", files: [] };
     if (kind !== "supp" && !Array.isArray(draft.files)) draft.files = [];
     if (kind === "supp" && !draft.ingredients.length) draft.ingredients.push(emptyIng());
     if (kind === "panel" && !draft.items.length) draft.items.push(emptyLabItem());
@@ -3774,17 +3981,17 @@ Rules:
   }
   function panelBody() {
     const d = S.sheet.draft;
-    return `${scanBox("Scan lab report", AI.canReadPdf() ? "image/*,application/pdf" : "image/*", (AI.canReadPdf() ? "Photos or a PDF" : "Photos or screenshots") + " – you can select several pages at once. The AI reads date, values, units and reference ranges; check them afterwards.")}
+    return `${scanBox("Scan lab report", "image/*,application/pdf", "Photos or a PDF – you can select several pages at once. The AI reads date, values, units and reference ranges; check them afterwards.")}
       <div class="grid2">
         <label class="field"><span>Date of the blood test</span><input type="date" data-dbind="date" value="${esc(d.date)}"></label>
         <label class="field"><span>Lab or practice</span><input data-dbind="source" value="${esc(d.source)}" placeholder="optional" autocomplete="off"></label>
       </div>
+      ${ctxBox(LAB_CTX, "e.g. fasting, had a cold, hard training the day before")}
       <fieldset class="group"><legend>Values</legend>
         <p class="hint">Enter values as printed, with your lab's reference range if shown – it takes priority over the app's general ranges. Pick the unit from the list; new values start with ${labSystem() === "si" ? "SI units (mmol/L, µmol/L, g/L …)" : "conventional units (mg/dL, ng/mL …)"} – change the default in your profile.</p>
         <div id="li-list" class="li-list">${d.items.map(labItemRow).join("")}</div>
         <button class="btn small" data-action="li-add">${ICON.plus}<span>Value</span></button>
       </fieldset>
-      <label class="field"><span>Notes</span><textarea data-dbind="notes" rows="2" placeholder="e.g. not fasting, had a cold">${esc(d.notes)}</textarea></label>
       ${filesSlot("Photos and documents", "Keep the original report here – photos or PDF.")}`;
   }
 
@@ -3799,6 +4006,7 @@ Rules:
       ${d.type === "Other" ? `<label class="field"><span>Name of the examination</span><input data-dbind="customType" value="${esc(d.customType)}" placeholder="e.g. Allergy test"></label>` : ""}
       <label class="field"><span>Result</span><select data-dbind="result">${Object.keys(RESULT).map(k => opt(k, RESULT[k], d.result)).join("")}</select></label>
       <label class="field"><span>What was found or recommended?</span><textarea data-dbind="summary" rows="4" placeholder="e.g. small polyp removed, all fine otherwise">${esc(d.summary)}</textarea></label>
+      ${ctxBox(EXAM_CTX, "e.g. why the examination was done, symptoms, what the doctor said")}
       <label class="field"><span>Next appointment recommended by your doctor</span><input type="date" data-dbind="nextDue" value="${esc(d.nextDue)}"></label>
       <p class="hint">Optional. Overrides the app's standard interval for this examination.</p>
       ${filesSlot("Photos and documents", "e.g. the findings letter or report.")}`;
@@ -3856,6 +4064,7 @@ Rules:
   function saveSheet() {
     const sh = S.sheet, d = sh.draft;
     const clean = JSON.parse(JSON.stringify(d));
+    delete clean.review;
     let list;
     if (sh.kind === "supp") {
       if (!String(d.product || "").trim() && !String(d.brand || "").trim()) { toast("Give the supplement a name.", "error"); const f = $('[data-dbind="product"]'); if (f) f.focus(); return; }
@@ -3961,6 +4170,20 @@ Rules:
     const kept = d.items.filter(i => String(i.name || "").trim());
     if (items.length) d.items = kept.concat(items);
   }
+  // Turns files into images the AI can read. PDFs become page images unless the provider reads PDFs itself.
+  async function filesToImages(files, maxDim) {
+    const aiUrls = [], originals = [], src = [];
+    for (let k = 0; k < files.length && aiUrls.length < 6; k++) {
+      const f = files[k];
+      const url = await fileToDataUrl(f, maxDim);
+      originals.push({ file: f, dataUrl: url });
+      if (f.type === "application/pdf" && !AI.canReadPdf()) {
+        const r = await PdfImg.toImages(url, 6 - aiUrls.length, maxDim);
+        r.images.forEach(u => { aiUrls.push(u); src.push(k); });
+      } else { aiUrls.push(url); src.push(k); }
+    }
+    return { aiUrls, originals, src };
+  }
   async function scanFiles(files) {
     const sh = S.sheet;
     if (!files.length || !sh) return;
@@ -3968,40 +4191,165 @@ Rules:
     rerenderBody();
     try {
       const list = files.slice(0, 6);
-      if (!AI.canReadPdf() && list.some(f => f.type === "application/pdf")) throw new Error(`PDF files can only be read with Claude. With ${AI.providerName()}, take screenshots of the pages and select them together.`);
-      const urls = [];
-      for (const f of list) urls.push(await fileToDataUrl(f, sh.kind === "supp" ? 1600 : 2200));
-      const more = files.length > 6 ? " Only the first 6 images were read." : "";
+      const conv = await filesToImages(list, sh.kind === "supp" ? 1600 : 2200);
+      const more = files.length > 6 ? " Only the first 6 files were read." : "";
       if (sh.kind === "panel") {
-        const r = await AI.readLabReport(urls);
+        const r = await AI.readLabReport(conv.aiUrls);
         if (S.sheet !== sh) return;
         applyReport(r);
-        if (sh.keepScans) for (let k = 0; k < list.length; k++) { sh.draft.files = sh.draft.files || []; sh.draft.files.push(await storeFile(list[k], urls[k])); }
+        if (sh.keepScans) for (const o of conv.originals) { sh.draft.files = sh.draft.files || []; sh.draft.files.push(await storeFile(o.file, o.dataUrl)); }
         toast(`${(r.items || []).length} values read – please check them.${more}`);
       } else if (sh.kind === "bp") {
-        const readings = cleanReadings(await AI.readBloodPressure(urls), list);
+        const readings = cleanReadings(await AI.readBloodPressure(conv.aiUrls), conv.src.map(k => list[k]));
         if (S.sheet !== sh) return;
         if (!readings.length) throw new Error("No blood pressure readings found in the photo.");
+        const urlFor = img => conv.originals[conv.src[img]].dataUrl, fileFor = img => list[conv.src[img]];
         if (readings.length === 1) {
           const x = readings[0];
           Object.assign(sh.draft, { sys: String(x.sys), dia: String(x.dia), pulse: x.pulse ? String(x.pulse) : sh.draft.pulse, at: x.at || sh.draft.at });
           sh.draft.files = sh.draft.files || [];
-          sh.draft.files.push(await storeFile(list[x.img], urls[x.img]));
+          sh.draft.files.push(await storeFile(fileFor(x.img), urlFor(x.img)));
           toast("Reading taken from the photo – please check it.");
         } else {
           sh.scanBusy = false;
           await closeSheet(true);
-          await importReadings(readings, list, urls);
+          await importReadings(readings, conv.src.map(k => list[k]), conv.src.map(k => conv.originals[k].dataUrl));
           return;
         }
       } else {
-        const r = await AI.readLabel(urls);
+        const r = await AI.readLabel(conv.aiUrls);
         if (S.sheet !== sh) return;
         applyLabel(r);
         toast("Label read – please check the values." + more);
       }
     } catch (e) { sh.scanError = e.message; }
     finally { sh.scanBusy = false; if (S.sheet === sh) rerenderBody(); }
+  }
+
+  // ----- Google Drive import -----
+  const LAB_CTX = ["Fasting", "Not fasting", "Had a cold or infection", "Hard training in the last 2 days", "Took biotin in the last 3 days", "During my period", "Medication changed recently", "New supplement recently"];
+  const EXAM_CTX = ["Routine check-up", "Because of symptoms", "Follow-up of an earlier finding"];
+  function ctxBox(chips, placeholder) {
+    const d = S.sheet.draft;
+    return `<label class="field"><span>Context</span><textarea data-dbind="notes" rows="2" placeholder="${esc(placeholder)}">${esc(d.notes || "")}</textarea></label>
+      <div class="quick ctx-chips">${chips.map(c => `<button class="chip-btn" data-action="ctx-add" data-t="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      <p class="hint">Context is included whenever the AI reviews your results.</p>`;
+  }
+  function setDriveBusy(text) { S.driveBusy = { text }; const el = $("#drive-status"); if (el) el.innerHTML = driveStatusInner(); }
+  function driveStatusInner() {
+    if (S.driveBusy) return `<div class="ai-busy" role="status"><span class="spinner"></span>${esc(S.driveBusy.text)}</div>`;
+    if (S.driveSummary) return `<div class="notice drive-sum">${S.driveSummary}<div class="actions"><button class="btn small" data-action="drive-dismiss">OK</button></div></div>`;
+    return "";
+  }
+  function driveStatus() { return `<div id="drive-status">${driveStatusInner()}</div>`; }
+  function isDuplicatePanel(date, items) {
+    return Store.data.labs.some(p => {
+      if (p.date !== date) return false;
+      let same = 0;
+      items.forEach(it => {
+        const m = Engine.matchMarker(it.name);
+        if ((p.items || []).some(x => { const mx = Engine.matchMarker(x.name); return (m && mx ? m.id === mx.id : U.norm(x.name) === U.norm(it.name)) && U.parseNum(x.value) === U.parseNum(it.value); })) same++;
+      });
+      return same >= Math.min(3, items.length);
+    });
+  }
+  async function addFromDocument(r, f, original) {
+    const date = r && /^\d{4}-\d{2}-\d{2}$/.test(r.date || "") ? r.date : String(f.modifiedTime || "").slice(0, 10) || todayLocal();
+    const source = String((r && r.source) || "").slice(0, 80);
+    const items = (r && Array.isArray(r.items) ? r.items : []).filter(i => i && i.name && i.value != null && String(i.value).trim())
+      .map(i => ({ id: Store.uid(), name: String(i.name), value: String(i.value), unit: i.unit ? String(i.unit) : "", refLow: i.refLow != null ? String(i.refLow) : "", refHigh: i.refHigh != null ? String(i.refHigh) : "" }));
+    const ex = r && r.exam && String(r.exam.summary || "").trim() ? r.exam : null;
+    const dup = items.length && isDuplicatePanel(date, items);
+    if ((!items.length || dup) && !ex) return items.length ? "dup" : "other";
+    const meta = await storeFile(original.file, original.dataUrl);
+    let kind = dup ? "dup" : "";
+    if (items.length && !dup) { Store.data.labs.push({ id: Store.uid(), date, source: source || "Google Drive", notes: "", items, files: [meta], review: true }); kind = "lab"; }
+    if (ex) {
+      const type = KB.examTypes.includes(ex.type) ? ex.type : "Other";
+      Store.data.exams.push({ id: Store.uid(), date, type, customType: type === "Other" ? String(ex.type || "Examination").slice(0, 60) : "",
+        result: ["normal", "finding", "followup"].includes(ex.result) ? ex.result : "finding", summary: String(ex.summary).slice(0, 1200),
+        nextDue: /^\d{4}-\d{2}-\d{2}$/.test(ex.nextDue || "") ? ex.nextDue : "", notes: "", files: [meta], review: true });
+      kind = kind === "lab" ? "both" : "exam";
+    }
+    return kind;
+  }
+  async function importDrive() {
+    if (S.driveBusy) return;
+    if (!AI.hasKey()) { toast("Set up the AI under Settings first.", "error"); return; }
+    const tokenP = Drive.getToken(); // first, so the sign-in window isn't blocked
+    S.driveSummary = null;
+    setDriveBusy("Connecting to Google Drive …");
+    const out = { lab: 0, exam: 0, dup: 0, other: 0, failed: [] };
+    let fresh = [], listing = null;
+    try {
+      await tokenP;
+      setDriveBusy("Looking for new files …");
+      listing = await Drive.listAll();
+      const done = Store.data.driveDone || {};
+      fresh = listing.files.filter(f => !done[f.id] || done[f.id].t !== f.modifiedTime);
+    } catch (e) { S.driveBusy = null; render(); toast(e.message, "error"); return; }
+    S.driveBusy = null;
+    if (!fresh.length) { S.driveSummary = `No new files in your Drive folder (${listing.files.length} already imported).`; render(); return; }
+    render();
+    const ok = await confirmBox(`${fresh.length} new ${fresh.length === 1 ? "file" : "files"} in Google Drive`,
+      `Dose reads ${fresh.length === 1 ? "it" : "them"} with ${AI.providerName()} – one AI request per file – and adds lab values and examinations. You can check and correct everything afterwards.`, `Import ${fresh.length}`);
+    if (!ok) return;
+    for (let k = 0; k < fresh.length; k++) {
+      const f = fresh[k];
+      setDriveBusy(`Reading ${k + 1} of ${fresh.length}: ${f.path || f.name}`);
+      try {
+        const file = await Drive.download(f);
+        const conv = await filesToImages([file], 2200);
+        const r = await AI.readDocument(conv.aiUrls);
+        const kind = await addFromDocument(r, f, conv.originals[0]);
+        if (kind === "both") { out.lab++; out.exam++; } else out[kind]++;
+        Store.data.driveDone[f.id] = { t: f.modifiedTime, name: f.name, kind };
+        Store.save();
+      } catch (e) { out.failed.push(`${f.name}: ${e.message}`); }
+    }
+    const parts = [];
+    if (out.lab) parts.push(`${out.lab} lab ${out.lab === 1 ? "report" : "reports"}`);
+    if (out.exam) parts.push(`${out.exam} ${out.exam === 1 ? "examination" : "examinations"}`);
+    S.driveBusy = null;
+    S.driveSummary = `<p><strong>${parts.length ? "Imported " + esc(parts.join(" and ")) + "." : "Nothing new was added."}</strong>${parts.length ? " They're marked “Imported – please check” below – open each one and compare the values with the original." : ""}</p>`
+      + (out.dup ? `<p class="small">${out.dup} ${out.dup === 1 ? "file was" : "files were"} already entered and skipped.</p>` : "")
+      + (out.other ? `<p class="small">${out.other} ${out.other === 1 ? "file wasn't" : "files weren't"} a medical report.</p>` : "")
+      + (listing.skipped.length ? `<p class="small">Skipped (unsupported format, e.g. HEIC or Google Docs): ${esc(listing.skipped.slice(0, 5).join(", "))}${listing.skipped.length > 5 ? " …" : ""}</p>` : "")
+      + (out.failed.length ? `<p class="small error-text">Couldn't read: ${esc(out.failed.join("; "))} – they'll be tried again next time.</p>` : "");
+    render();
+  }
+  async function driveTest(btn) {
+    const outEl = $("#drive-out");
+    const tokenP = Drive.getToken();
+    outEl.textContent = "Connecting …"; outEl.className = "small"; btn.disabled = true;
+    try {
+      await tokenP;
+      const info = await Drive.folderInfo();
+      const l = await Drive.listAll();
+      const done = Store.data.driveDone || {};
+      const fresh = l.files.filter(f => !done[f.id] || done[f.id].t !== f.modifiedTime).length;
+      outEl.textContent = `Connected to “${info.name}”: ${l.files.length} readable ${l.files.length === 1 ? "file" : "files"}, ${fresh} new.`;
+      outEl.className = "small ok-text";
+    } catch (e) { outEl.textContent = e.message; outEl.className = "small error-text"; }
+    finally { btn.disabled = false; }
+  }
+  async function runFollowup(id) {
+    const rep = Store.data.reports.find(r => r.id === id);
+    const text = String(S.fuDraft[id] || "").trim();
+    if (!rep || S.fuBusy) return;
+    if (!text) { toast("Write your context or question first.", "error"); return; }
+    S.fuBusy = id; S.fuError = null; S.openReport = id; render();
+    try {
+      const answer = await AI.followUp(Store.data, rep, text);
+      rep.followups = (rep.followups || []).concat([{ id: Store.uid(), date: new Date().toISOString(), question: text, content: answer, model: AI.modelLabel() }]);
+      S.fuDraft[id] = "";
+      Store.save();
+    } catch (e) { S.fuError = { id, msg: e.message }; }
+    finally {
+      S.fuBusy = null;
+      if (S.route === "advisor" && !S.sheet) { render(); const el = $(`[data-report="${id}"] .fu:last-of-type`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      else toast("Follow-up ready – see Advisor");
+    }
   }
 
   // ----- files (photos, PDFs) -----
@@ -4322,6 +4670,7 @@ Rules:
         <div class="quick">${quick.map(q => `<button class="chip-btn" data-action="ask-fill" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
         <div class="actions"><button class="btn primary" data-action="ai-ask"${off}>Get recommendations</button></div>
       </section>
+      <label class="field extra-ctx"><span>Anything the AI should know for these reviews? (optional)</span><textarea id="extra-ctx" rows="2" placeholder="e.g. I've felt tired for weeks; my last ferritin test was during a cold">${esc(S.extraCtx)}</textarea></label>
       <div class="advisor-cards">
         <section class="card"><h2>Review my results</h2><p>Interprets your lab values and examinations: what to take, stop or change, and which tests to do when.</p>
           <button class="btn" data-action="ai-results"${off}>Review results</button></section>
@@ -4341,6 +4690,11 @@ Rules:
       <summary><span class="r-title">${esc(r.title)}</span><span class="r-date">${esc(fmtDateTime(r.date))}</span></summary>
       ${r.question ? `<p class="r-q">${esc(r.question)}</p>` : ""}
       <div class="md">${Markdown.render(r.content)}</div>
+      ${(r.followups || []).map(f => `<div class="fu"><p class="r-q">${esc(f.question)}</p><div class="md">${Markdown.render(f.content)}</div></div>`).join("")}
+      <div class="fu-form">${S.fuBusy === r.id ? `<div class="ai-busy" role="status"><span class="spinner"></span>Updating with your context …</div>`
+        : `<label class="sr-only" for="fu-${esc(r.id)}">Add context or a follow-up question</label><textarea id="fu-${esc(r.id)}" data-fu="${esc(r.id)}" rows="2" placeholder="Add context or ask a follow-up – e.g. “The ferritin test was during a cold”">${esc(S.fuDraft[r.id] || "")}</textarea>
+          <button class="btn small" data-action="report-followup" data-id="${esc(r.id)}"${AI.hasKey() ? "" : " disabled"}>Send</button>`}
+        ${S.fuError && S.fuError.id === r.id ? `<p class="error">${esc(S.fuError.msg)}</p>` : ""}</div>
       <div class="r-actions"><span class="muted small">${esc(r.model || "")}</span><button class="btn small danger-ghost" data-action="report-del" data-id="${esc(r.id)}">Delete report</button></div>
     </details>`;
   }
@@ -4355,8 +4709,9 @@ Rules:
     const st = $("#ai-status"); if (st) st.scrollIntoView({ behavior: "smooth", block: "center" });
     let rep = null;
     try {
-      const text = kind === "ask" ? await AI.solveProblem(Store.data, q) : kind === "results" ? await AI.reviewResults(Store.data) : await AI.analyzePlan(Store.data);
-      rep = addReport({ type: kind, title: kind === "ask" ? shorten(q, 80) : kind === "results" ? "Results review" : "Plan check", question: kind === "ask" ? q : "", content: text });
+      const extra = (S.extraCtx || "").trim();
+      const text = kind === "ask" ? await AI.solveProblem(Store.data, q) : kind === "results" ? await AI.reviewResults(Store.data, extra) : await AI.analyzePlan(Store.data, extra);
+      rep = addReport({ type: kind, title: kind === "ask" ? shorten(q, 80) : kind === "results" ? "Results review" : "Plan check", question: kind === "ask" ? q : extra, content: text });
       S.openReport = rep.id;
       if (kind === "ask") S.askDraft = "";
     } catch (e) { S.aiError = e.message; }
@@ -4411,9 +4766,16 @@ Rules:
           <label class="field"><span>Model for advice</span>${modelSelect(p + "Model", P.textModels)}</label>
           <label class="field"><span>Model for reading labels and reports</span>${modelSelect(p + "VisionModel", P.visionModels)}</label>
         </div>
-        <p class="hint">${p === "qwen" ? "Qwen3.8-Max is the newest and most capable Qwen model and also reads images. " : ""}If the app reports that a model isn't available, it may not be offered in your region yet – choose another one. PDF reports can only be read with Claude – with ${esc(P.short)}, select photos or screenshots of the pages instead.</p>`;
+        <p class="hint">${p === "qwen" ? "Qwen3.8-Max is the newest and most capable Qwen model and also reads images. " : ""}If the app reports that a model isn't available, it may not be offered in your region yet – choose another one. PDF reports are turned into page images in your browser so ${esc(P.short)} can read them.</p>`;
         })()}
         <div class="actions"><button class="btn" data-action="ai-test">Test connection</button><span id="ai-test-out" class="small" role="status"></span></div>
+      </section>
+      <section class="block form-block"><h2>Google Drive</h2>
+        <p class="hint">Dose can read lab and examination reports from one Google Drive folder and add them for you – photos and PDFs. It only asks for read access; files go from Drive to this browser and to your AI provider. Setup takes about 15 minutes – see DRIVE.md. Stored only on this device.</p>
+        <label class="field"><span>OAuth client ID</span><input data-sbind="drive.clientId" value="${esc(s.drive.clientId)}" placeholder="….apps.googleusercontent.com" autocomplete="off" spellcheck="false" autocapitalize="off"></label>
+        <label class="field"><span>Drive folder link</span><input data-sbind="drive.folder" value="${esc(s.drive.folder)}" placeholder="https://drive.google.com/drive/folders/…" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url"></label>
+        <p class="hint">In Google Cloud, add this app's address as an authorized JavaScript origin: <strong class="origin">${esc(location.origin)}</strong></p>
+        <div class="actions"><button class="btn" data-action="drive-test"${s.drive.clientId && Drive.folderId() ? "" : " disabled"}>Connect and check</button><span id="drive-out" class="small" role="status"></span></div>
       </section>
       <section class="block form-block"><h2>Sync</h2>
         <p class="sync-state s-${st.state}">${syncStateText(st)}</p>
@@ -4551,6 +4913,17 @@ Rules:
       case "close-viewer": $("#viewer-root").innerHTML = ""; break;
       case "file-del": if (sh) { sh.draft.files.splice(+el.dataset.i, 1); refreshFiles(); } break;
       case "ing-lookup": lookupIngredient(+el.dataset.i); break;
+      case "ctx-add": {
+        if (!sh) break;
+        const cur = String(sh.draft.notes || "").trim();
+        if (!cur.toLowerCase().includes(el.dataset.t.toLowerCase())) sh.draft.notes = cur ? cur + "; " + el.dataset.t : el.dataset.t;
+        const ta = $('[data-dbind="notes"]'); if (ta) ta.value = sh.draft.notes;
+        break;
+      }
+      case "drive-import": importDrive(); break;
+      case "drive-test": driveTest(el); break;
+      case "drive-dismiss": S.driveSummary = null; { const ds = $("#drive-status"); if (ds) ds.innerHTML = ""; } break;
+      case "report-followup": runFollowup(el.dataset.id); break;
       case "custom-del": {
         if (!(await confirmBox("Remove ingredient?", "It's removed from your database. Supplements that contain it keep the entry, but it's no longer checked.", "Remove", true))) return;
         Store.data.customNutrients = Store.data.customNutrients.filter(c => c.id !== el.dataset.id);
@@ -4644,7 +5017,13 @@ Rules:
       setPath(Store.settings, p, el.value);
       Store.saveSettings();
       if (p === "gh.owner" || p === "gh.repo") Store.resetSync();
+      if (p === "drive.clientId" && el.value.trim()) Drive.load().catch(() => {});
       if (p === "model" || p === "aiProvider" || /Model$/.test(p)) render();
+      if (p.indexOf("drive.") === 0) { const b = $('[data-action="drive-test"]'); if (b) b.disabled = !(Store.settings.drive.clientId.trim() && Drive.folderId()); }
+    } else if (el.id === "extra-ctx") {
+      S.extraCtx = el.value;
+    } else if (el.dataset.fu) {
+      S.fuDraft[el.dataset.fu] = el.value;
     } else if (el.id === "ask-text") {
       S.askDraft = el.value;
     } else if (el.matches("[data-scan]")) {
@@ -4686,6 +5065,7 @@ Rules:
     $("#nav").innerHTML = navHtml();
     render();
     Attach.gc(allFileRefs()).catch(() => {});
+    if (Store.settings.drive.clientId) Drive.load().catch(() => {});
     Sync.onStatus(updateSyncUi);
     Sync.onConflict = ({ local, remote }) => modal({
       title: "Two different versions",
