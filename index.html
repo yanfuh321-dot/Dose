@@ -622,6 +622,63 @@ path.bp-sys { stroke: var(--s-abend); } path.bp-dia { stroke: var(--s-schlaf); }
 #drive-status:empty { display: none; }
 #drive-status { margin-bottom: 14px; }
 
+/* ---------- v6: doctor report (screen preview and print) ---------- */
+#print-root { display: none; }
+body.printing #print-root { display: block; position: fixed; inset: 0; z-index: 95; overflow: auto; background: #dfe4e0; -webkit-overflow-scrolling: touch; }
+.pr-toolbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.pr-toolbar .spacer { flex: 1; }
+.pr-toolbar .hint { margin: 0; width: 100%; }
+.pr-doc { --line: #d3dbd2; --ink-3: #6b7a72; --warn: #8a5d0e; --s-abend: #ae6188; --s-schlaf: #3e4b8a;
+  box-sizing: border-box; width: 100%; max-width: 210mm; margin: 14px auto 40px; padding: 12mm 12mm 10mm; background: #fff; color: #161616;
+  font: 10pt/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .18); }
+.pr-doc h1, .pr-doc h2, .pr-doc h3 { font-family: inherit; color: #161616; }
+.pr-doc h1 { font-size: 16pt; margin: 2px 0 4px; }
+.pr-doc h2 { font-size: 12pt; margin: 16px 0 6px; padding-bottom: 3px; border-bottom: 1.5px solid #1e5a4b; break-after: avoid; }
+.pr-doc h3 { font-size: 10.5pt; margin: 10px 0 4px; break-after: avoid; }
+.pr-doc .zh { color: #555; font-weight: 400; margin-left: 3px; }
+.pr-doc .zh-block { display: block; color: #555; font-size: .95em; margin-top: 1px; }
+.pr-doc h2 .zh, .pr-doc h1 .zh { color: #444; }
+.pr-brand { font-size: 9pt; color: #1e5a4b; font-weight: 700; letter-spacing: .05em; }
+.pr-topic { margin: 0 0 8px; color: #333; }
+.pr-meta { width: 100%; border-collapse: collapse; margin: 6px 0 4px; font-size: 9.5pt; }
+.pr-meta td { padding: 3px 8px 3px 0; vertical-align: top; }
+.pr-meta td:nth-child(odd) { color: #555; white-space: nowrap; }
+.pr-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+.pr-table th, .pr-table td { border-bottom: 1px solid #d9dfd8; padding: 4px 6px; text-align: left; vertical-align: top; }
+.pr-table thead th { background: #eef2ee; font-weight: 600; }
+.pr-table tbody th { width: 28%; font-weight: 600; color: #333; }
+.pr-table td.v, .pr-table th.v { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pr-table td.flag { font-weight: 700; color: #a3312a; }
+.pr-narrow { max-width: 130mm; margin-bottom: 6px; }
+.pr-wrap { overflow-x: auto; }
+.pr-note { font-size: 8.5pt; color: #555; margin: 4px 0 0; }
+.pr-hr { border: 0; border-top: 1px dashed #c9d1c8; margin: 8px 0; }
+.pr-doc .md { font-size: 10pt; max-width: none; }
+.pr-doc .md h2, .pr-doc .md h3, .pr-doc .md h4 { border: 0; font-size: 10.5pt; margin: 8px 0 4px; padding: 0; }
+.pr-list { padding-left: 18px; margin: 4px 0; }
+.pr-list li { margin: 3px 0; }
+.pr-sev { font-size: 8pt; font-weight: 700; color: #8a5d0e; }
+.pr-foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #d9dfd8; font-size: 8pt; color: #555; }
+.pr-foot p { margin: 0 0 4px; }
+.pr-doc .bp-legend { display: none; }
+.pr-doc .bpchart-wrap { margin: 6px 0 2px; }
+.pr-doc svg.bpchart { max-height: 62mm; }
+.pr-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 8.5pt; color: #444; margin: 2px 0 8px; }
+.pr-legend span::before { content: ""; display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+@media print {
+  @page { size: A4; margin: 12mm 11mm 14mm; @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; color: #777; } }
+  html, body { background: #fff !important; overflow: visible !important; height: auto !important; }
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing #print-root { position: static; overflow: visible; background: #fff; }
+  .pr-toolbar { display: none !important; }
+  .pr-doc { box-shadow: none; margin: 0; padding: 0; max-width: none; width: auto; }
+  .pr-wrap { overflow: visible; }
+  .pr-table tr, .pr-list li, .pr-meta tr { break-inside: avoid; }
+  .pr-table thead { display: table-header-group; }
+  .pr-doc, .pr-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 </style>
 </head>
 <body>
@@ -1749,7 +1806,7 @@ window.KB = {
   function labUnitKey(u) {
     return String(u || "").toLowerCase().replace(/\s+/g, "").replace(/[µμ]/g, "u").replace(/mcg/g, "ug")
       .replace(/[×x*](?=10)/g, "").replace(/10(?:e|\*\*?|\^)(\d+)/g, "10^$1").replace(/¹²/g, "^12").replace(/³/g, "^3").replace(/⁶/g, "^6").replace(/⁹/g, "^9").replace(/²/g, "2")
-      .replace(/m\^2/g, "m2").replace(/,/g, ".").replace(/^tsd\//, "10^3/").replace(/^mio\//, "10^6/").replace(/次\/分钟?/, "bpm");
+      .replace(/m\^2/g, "m2").replace(/iu/g, "u").replace(/,/g, ".").replace(/^tsd\//, "10^3/").replace(/^mio\//, "10^6/").replace(/次\/分钟?/, "bpm");
   }
   function toCanon(m, v, unit) {
     if (v == null || !m) return null;
@@ -2317,7 +2374,7 @@ window.KB = {
   const KEYS = { data: "dose.data.v1", settings: "dose.settings.v1", sync: "dose.sync.v1" };
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function emptyProfile() {
-    return { birthYear: "", sex: "", heightCm: "", weightKg: "", conditions: [], conditionsText: "", medications: [], allergies: "",
+    return { name: "", birthYear: "", sex: "", heightCm: "", weightKg: "", conditions: [], conditionsText: "", medications: [], allergies: "",
       diet: "", dietNotes: "", activity: "", sport: "", sleepHours: "", stress: "", smoking: "", alcohol: "", goals: [], goalsText: "", labUnits: "si" };
   }
   function emptyData() { return { version: 3, meta: { updatedAt: null }, profile: emptyProfile(), supplements: [], labs: [], exams: [], bp: [], customNutrients: [], deletedFiles: [], driveDone: {}, reports: [] }; }
@@ -3376,9 +3433,320 @@ New context or follow-up question from me: """${text}"""
 
 Take this into account. If it changes your earlier assessment, say exactly what changes and why; answer my question if I asked one. Don't repeat what stays the same. Keep it short.`, 4000);
   }
+  async function doctorReport(data, o) {
+    const zhName = "Simplified Chinese, using the medical terms common in Chinese hospitals";
+    const keys = [];
+    if (o.summary) o.langs.forEach(l => {
+      const lang = l === "zh" ? zhName : "English";
+      keys.push(`"summary_${l}": a factual summary for the treating physician in ${lang} – Markdown with short paragraphs or bullet points, at most 220 words`);
+      keys.push(`"questions_${l}": an array of 3–6 short questions or topics I'd like to discuss with the doctor, in ${lang}`);
+    });
+    if (o.strings.length) keys.push(`"translations": an object mapping the number of each text below to its translation into ${zhName} (keep numbers, units, dates and drug or product names)`);
+    const list = o.strings.map((s, i) => `[${i + 1}] ${s.replace(/\s+/g, " ")}`).join("\n");
+    const text = await call({
+      system: "You prepare concise, factual medical summaries for physicians and translate medical texts. You answer with valid JSON only.",
+      messages: [{ role: "user", content: `${buildContext(data)}
+
+---
+I'm preparing a written summary to show my doctor${o.focus ? `, focused on: ${o.focus}` : ""} (period: ${o.period}).
+Answer only with a JSON object without Markdown fences, with these keys:
+- ${keys.join("\n- ")}
+${o.summary ? `
+Summary rules: write about “the patient” in the third person; factual and compact – relevant conditions and medication, supplements, abnormal lab values with dates and trends, examination findings, home blood pressure. No diagnoses or treatment advice; mention normal values only where relevant${o.focus ? " to the focus" : ""}. The questions are written from my perspective.
+` : ""}${o.strings.length ? `
+Texts to translate:
+${list}` : ""}` }],
+      maxTokens: 8000
+    });
+    return parseJson(text, "The AI's answer for the report couldn't be read. Try again.");
+  }
   function test() { return call({ system: "Answer with exactly one word.", messages: [{ role: "user", content: "Say 'Connected'." }], maxTokens: 300 }); }
 
-  window.AI = { MODELS, PROVIDERS, lookupIngredient, readBloodPressure, readDocument, followUp, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
+  window.AI = { MODELS, PROVIDERS, doctorReport, lookupIngredient, readBloodPressure, readDocument, followUp, provider, providerName, canReadPdf, model, modelLabel, hasKey, analyzePlan, solveProblem, reviewResults, checkProduct, readLabel, readLabReport, test, buildContext };
+})();
+
+</script>
+<script>
+/* =====================================================================
+   DOCTOR REPORT – a printable summary (save as PDF) in English,
+   Simplified Chinese or both. Built from your data; the AI can add a
+   summary for the doctor and translate your own notes.
+   ===================================================================== */
+(function () {
+  const KB = window.KB, U = Engine.util;
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const TOPICS = [
+    { id: "overview", en: "Complete overview", zh: "全面概览" },
+    { id: "iron", en: "Iron and blood count", zh: "铁代谢与血常规", markers: ["ferritin", "hb", "mcv", "mch", "mchc", "rbc", "hct", "iron_s", "tsat", "crp", "wbc", "platelets"], nutrients: ["iron", "vitamin_c"] },
+    { id: "vitd", en: "Vitamin D, calcium and bones", zh: "维生素D、钙与骨骼", markers: ["vitd", "calcium_s", "magnesium", "alp"], nutrients: ["vitamin_d", "vitamin_k", "calcium", "magnesium"], exams: ["Bone density (DEXA)"] },
+    { id: "b12", en: "Vitamin B12 and folate", zh: "维生素B12与叶酸", markers: ["b12", "holotc", "folate", "homocysteine", "mcv", "hb"], nutrients: ["vitamin_b12", "folate", "vitamin_b6"] },
+    { id: "thyroid", en: "Thyroid", zh: "甲状腺", markers: ["tsh", "ft4", "ft3", "tpo"], nutrients: ["iodine", "selenium", "ashwagandha", "biotin"], exams: ["Thyroid ultrasound"] },
+    { id: "heart", en: "Heart, lipids and blood pressure", zh: "心血管、血脂与血压", markers: ["ldl", "hdl", "tg", "chol", "lpa", "apob", "crp", "bp_sys", "bp_dia", "hr", "hba1c", "glucose"], nutrients: ["omega3", "red_yeast_rice", "coq10", "garlic", "berberine"], exams: ["ECG", "Heart ultrasound (echo)", "Blood pressure check", "Aortic ultrasound (AAA)"], bp: true },
+    { id: "sugar", en: "Blood sugar and metabolism", zh: "血糖与代谢", markers: ["hba1c", "glucose", "uric", "tg", "hdl", "weight", "waist"], nutrients: ["berberine", "chromium", "alpha_lipoic", "inositol"] },
+    { id: "kidney", en: "Kidneys and electrolytes", zh: "肾功能与电解质", markers: ["creatinine", "egfr", "cystatin", "urea", "potassium", "sodium", "calcium_s", "uric"], nutrients: ["potassium", "magnesium", "creatine", "vitamin_c", "protein"], bp: true },
+    { id: "liver", en: "Liver", zh: "肝功能", markers: ["alt", "ast", "ggt", "alp", "bili", "albumin"], nutrients: ["turmeric", "ashwagandha", "green_tea", "milk_thistle", "vitamin_a", "vitamin_b3", "red_yeast_rice"], exams: ["Abdominal ultrasound"] },
+    { id: "bp", en: "Home blood pressure", zh: "家庭血压", markers: ["bp_sys", "bp_dia", "hr", "potassium", "sodium", "creatinine", "egfr"], nutrients: ["sodium", "potassium", "caffeine", "garlic"], exams: ["Blood pressure check", "ECG"], bp: true },
+    { id: "supplements", en: "Supplements and medication", zh: "保健品与用药", markers: [], noLabs: true },
+    { id: "custom", en: "My own topic", zh: "自定义主题" }
+  ];
+  function topicOf(id) { return TOPICS.find(t => t.id === id) || TOPICS[0]; }
+
+  const MK_ZH = {
+    vitd: "25-羟基维生素D", b12: "维生素B12", holotc: "全反钴胺素(活性B12)", folate: "叶酸", magnesium: "镁", zinc: "锌", selenium: "硒",
+    omega3index: "Omega-3指数", homocysteine: "同型半胱氨酸(Hcy)", ferritin: "铁蛋白", hb: "血红蛋白(Hb)", mcv: "平均红细胞体积(MCV)",
+    mch: "平均红细胞血红蛋白量(MCH)", mchc: "平均红细胞血红蛋白浓度(MCHC)", wbc: "白细胞计数(WBC)", platelets: "血小板计数(PLT)",
+    rbc: "红细胞计数(RBC)", hct: "红细胞压积(HCT)", iron_s: "血清铁", tsat: "转铁蛋白饱和度", hba1c: "糖化血红蛋白(HbA1c)",
+    glucose: "空腹血糖", uric: "尿酸", ldl: "低密度脂蛋白胆固醇(LDL-C)", hdl: "高密度脂蛋白胆固醇(HDL-C)", tg: "甘油三酯(TG)",
+    chol: "总胆固醇(TC)", lpa: "脂蛋白(a)", apob: "载脂蛋白B", tsh: "促甲状腺激素(TSH)", ft4: "游离甲状腺素(FT4)",
+    ft3: "游离三碘甲状腺原氨酸(FT3)", tpo: "甲状腺过氧化物酶抗体(TPOAb)", creatinine: "肌酐(Cr)", egfr: "估算肾小球滤过率(eGFR)",
+    cystatin: "胱抑素C", urea: "尿素", potassium: "钾", sodium: "钠", calcium_s: "血钙", alt: "丙氨酸氨基转移酶(ALT)",
+    ast: "天门冬氨酸氨基转移酶(AST)", ggt: "γ-谷氨酰转移酶(GGT)", alp: "碱性磷酸酶(ALP)", bili: "总胆红素", albumin: "白蛋白",
+    crp: "C反应蛋白(CRP)", bp_sys: "收缩压", bp_dia: "舒张压", hr: "静息心率", weight: "体重", waist: "腰围"
+  };
+  const NUT_ZH = { omega3: "Omega-3（EPA+DHA）", vitamin_k: "维生素K", beta_carotene: "β-胡萝卜素", protein: "蛋白粉", sodium: "钠（电解质）", nad_precursor: "NMN/NR（NAD+前体）" };
+  const COND_ZH = { pregnancy: "妊娠、哺乳或备孕", kidney: "肾功能减退", kidneyStones: "肾结石（含既往）", liver: "肝脏疾病", hashimoto: "桥本甲状腺炎/自身免疫性甲状腺病",
+    hyperthyroid: "甲状腺功能亢进", hemochromatosis: "血色病（铁过载）", diabetes: "糖尿病", hypertension: "高血压", arrhythmia: "心律失常",
+    bleeding: "出血倾向/凝血障碍", autoimmune: "其他自身免疫性疾病", cancer: "正在治疗的肿瘤", epilepsy: "癫痫", stomach: "胃部敏感/胃炎/反流", surgery: "近期拟行手术" };
+  const EXAM_ZH = { "General check-up": "常规体检", "Blood pressure check": "血压检查", "ECG": "心电图", "Heart ultrasound (echo)": "心脏超声", "Colonoscopy": "结肠镜检查",
+    "Stool test (FIT)": "粪便免疫化学检测(FIT)", "Cervical screening (Pap/HPV)": "宫颈癌筛查(TCT/HPV)", "Mammogram": "乳腺钼靶", "Breast ultrasound": "乳腺超声",
+    "Skin check": "皮肤检查", "Dental check-up": "口腔检查", "Eye exam": "眼科检查", "Hearing test": "听力检查", "Bone density (DEXA)": "骨密度检查(DEXA)",
+    "Abdominal ultrasound": "腹部超声", "Aortic ultrasound (AAA)": "腹主动脉超声", "Thyroid ultrasound": "甲状腺超声", "Prostate check / PSA": "前列腺检查/PSA",
+    "Hepatitis/HIV test": "肝炎/HIV检测", "Other": "其他" };
+  const RESULT = { normal: ["No findings", "未见异常"], finding: ["Findings", "有异常发现"], followup: ["Follow-up needed", "需随访"] };
+  const SLOT_ZH = { fasting: "早餐前（空腹）", breakfast: "早餐时", lunch: "午餐时", dinner: "晚餐时", bedtime: "睡前" };
+  const SEX = { female: ["female", "女"], male: ["male", "男"], other: ["other", "其他"] };
+  const DIET_ZH = { Omnivore: "杂食", Flexitarian: "弹性素食", Pescatarian: "鱼素", Vegetarian: "素食", Vegan: "纯素", "Low carb / keto": "低碳水/生酮", Other: "其他" };
+  const SMOKE = { no: ["non-smoker", "不吸烟"], former: ["former smoker", "已戒烟"], yes: ["smoker", "吸烟"] };
+  const ALC = { never: ["no alcohol", "不饮酒"], rarely: ["alcohol rarely", "偶尔饮酒"], weekly: ["alcohol weekly", "每周饮酒"], "almost daily": ["alcohol almost daily", "几乎每天饮酒"] };
+  const CAT_ZH = { "Vitamins and minerals": "维生素与矿物质", "Iron and blood count": "铁代谢与血常规", "Blood sugar and metabolism": "血糖与代谢", "Lipids": "血脂",
+    "Thyroid": "甲状腺", "Kidneys and electrolytes": "肾功能与电解质", "Liver": "肝功能", "Inflammation": "炎症指标", "Vital signs": "生命体征", "Other values": "其他指标" };
+  const SEV = { danger: ["Please assess", "请医生评估"], warn: ["Caution", "注意"], timing: ["Timing", "服用时间"] };
+
+  function markerZh(m) {
+    if (!m) return "";
+    if (MK_ZH[m.id]) return MK_ZH[m.id];
+    return (m.aliases || []).find(x => /[\u3400-\u9fff]/.test(x)) || "";
+  }
+  function nutrientZh(n) {
+    if (!n) return "";
+    if (NUT_ZH[n.id]) return NUT_ZH[n.id];
+    const a = (n.aliases || []).find(x => /[\u3400-\u9fff]/.test(x));
+    if (!a) return "";
+    return a.replace(/^维生素([a-z])/, (x, c) => "维生素" + c.toUpperCase()).replace(/q10/, "Q10").replace(/^l(?=[\u3400-\u9fff])/, "L-").replace(/^beta/, "β-").replace(/^5(?=[\u3400-\u9fff])/, "5-");
+  }
+  function isoDaysAgo(months) { const d = new Date(); d.setMonth(d.getMonth() - months); return d.toISOString().slice(0, 10); }
+  function iso(d) { const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+
+  // ---------- choose the data for the report ----------
+  function prepare(data, o) {
+    const t = topicOf(o.topic);
+    const all = !t.markers;
+    const months = o.period === "all" ? null : Number(o.period) || 24;
+    const cutoff = months ? isoDaysAgo(months) : "";
+    const inP = d => !cutoff || (d && String(d).slice(0, 10) >= cutoff);
+    const p = data.profile || {};
+
+    const rows = [];
+    if (!t.noLabs) Engine.labHistory(data).forEach(h => {
+      if (!all && !(h.marker && t.markers.includes(h.marker.id))) return;
+      const ents = h.entries.filter(e => inP(e.date) && String(e.item.value || "").trim());
+      if (ents.length) rows.push({ h, ents });
+    });
+    const panelIds = new Set(rows.reduce((a, r) => a.concat(r.ents.map(e => e.panelId)), []));
+    const contexts = (data.labs || []).filter(pn => panelIds.has(pn.id) && String(pn.notes || "").trim())
+      .sort((a, b) => ((a.date || "") < (b.date || "") ? -1 : 1)).map(pn => ({ date: pn.date, source: pn.source || "", text: pn.notes.trim() }));
+
+    const exams = (data.exams || []).filter(e => inP(e.date) && (all || (t.exams || []).includes(e.type)))
+      .sort((a, b) => ((a.date || "") < (b.date || "") ? 1 : -1));
+
+    let bp = null;
+    if (o.bp && (all || t.bp)) {
+      const st = Engine.bpStats(data);
+      const list = st.list.filter(x => inP(iso(x.t)));
+      if (list.length) bp = { list, avg7: st.avg7, avg30: st.avg30 };
+    }
+
+    let supps = [];
+    if (o.supps) {
+      supps = (data.supplements || []).filter(U.isActive);
+      if (!all && t.id !== "supplements" && t.nutrients) supps = supps.filter(s => U.suppNutrients(s).some(n => t.nutrients.includes(n.id)));
+    }
+    const meds = (p.medications || []).filter(m => String(m.name || "").trim());
+    const conds = (p.conditions || []).map(c => ({ id: c, en: (Engine.COND[c] || { label: c }).label, zh: COND_ZH[c] || "" }));
+
+    let findings = [];
+    if (o.checks) {
+      const markerSet = new Set(t.markers || []), nutSet = new Set(t.nutrients || []);
+      const relevantSupp = id => { const s = (data.supplements || []).find(x => x.id === id); return s && U.suppNutrients(s).some(n => nutSet.has(n.id)); };
+      findings = Engine.analyze(data).findings.filter(f => ["danger", "warn", "timing"].includes(f.sev)).filter(f =>
+        all || t.id === "supplements" || (f.lab && markerSet.has(f.lab)) || (f.supps || []).some(relevantSupp) || (t.bp && f.tag === "Blood pressure"));
+    }
+
+    const strings = [];
+    const addS = s => { s = String(s || "").trim(); if (s && !strings.includes(s) && strings.length < 150) strings.push(s.slice(0, 600)); };
+    addS(p.conditionsText); addS(p.allergies); addS(p.dietNotes);
+    contexts.forEach(c => addS(c.text));
+    exams.forEach(e => { addS(e.summary); addS(e.notes); if (e.type === "Other") addS(e.customType); });
+    supps.forEach(s => addS(s.purpose));
+    findings.forEach(f => { addS(f.title); addS(f.text); });
+    if (bp) bp.list.slice(-14).forEach(x => addS(x.r.note));
+
+    return { t, o, cutoff, rows, contexts, exams, bp, supps, meds, conds, findings, strings, profile: p,
+      periodText: cutoff ? "since " + cutoff : "all available data" };
+  }
+
+  // ---------- render the printable document ----------
+  function render(m, ai, opts) {
+    const langs = opts.langs, zh = langs.includes("zh"), en = langs.includes("en"), both = zh && en;
+    const tr = (ai && ai.translations) || {};
+    const trMap = new Map();
+    m.strings.forEach((s, i) => { const v = tr[String(i + 1)]; if (v) trMap.set(s, String(v)); });
+    const L = (e, z) => (both ? `${esc(e)} <span class="zh" lang="zh-CN">${esc(z)}</span>` : zh ? esc(z) : esc(e));
+    const T = s => {
+      s = String(s || "").trim();
+      if (!s) return "";
+      const z = trMap.get(s);
+      if (both) return esc(s) + (z ? `<span class="zh-block" lang="zh-CN">${esc(z)}</span>` : "");
+      return zh ? esc(z || s) : esc(s);
+    };
+    const N = (e, z) => (both ? esc(e) + (z ? `<span class="zh-block" lang="zh-CN">${esc(z)}</span>` : "") : zh ? esc(z || e) : esc(e));
+    const p = m.profile, sexKey = U.sexKey(p);
+    const today = iso(new Date());
+    const out = [];
+
+    // header
+    const by = U.parseNum(p.birthYear);
+    const sex = SEX[p.sex];
+    const topicLine = m.o.topic === "custom" && String(m.o.custom || "").trim() ? N(m.o.custom.trim(), "") : L(m.t.en, m.t.zh);
+    out.push(`<header class="pr-head"><div class="pr-brand">Dose</div>
+      <h1>${L("Health summary for my doctor", "健康摘要（供医生参考）")}</h1>
+      <p class="pr-topic">${L("Topic", "主题")}: ${topicLine}</p>
+      <table class="pr-meta"><tbody>
+        <tr><td>${L("Name", "姓名")}</td><td>${esc(p.name || "—")}</td><td>${L("Created", "生成日期")}</td><td>${today}</td></tr>
+        <tr><td>${L("Born, sex", "出生年份、性别")}</td><td>${by ? by + (both || en ? ` (${new Date().getFullYear() - by} ${both ? "y / 岁" : "y"})` : ` (${new Date().getFullYear() - by}岁)`) : "—"}${sex ? ", " + L(sex[0], sex[1]) : ""}</td>
+          <td>${L("Period", "时间范围")}</td><td>${m.cutoff ? L("since " + m.cutoff, m.cutoff + " 至今") : L("all data", "全部数据")}</td></tr>
+        <tr><td>${L("Height, weight", "身高、体重")}</td><td>${p.heightCm ? esc(p.heightCm) + " cm" : "—"}${p.weightKg ? ", " + esc(p.weightKg) + " kg" : ""}</td>
+          <td>${L("Lifestyle", "生活方式")}</td><td>${[p.diet ? L(p.diet, DIET_ZH[p.diet] || p.diet) : "", SMOKE[p.smoking] ? L(SMOKE[p.smoking][0], SMOKE[p.smoking][1]) : "", ALC[p.alcohol] ? L(ALC[p.alcohol][0], ALC[p.alcohol][1]) : ""].filter(Boolean).join("; ") || "—"}</td></tr>
+      </tbody></table></header>`);
+
+    // AI summary and questions
+    if (ai && opts.summary) {
+      const blocks = [];
+      if (en && ai.summary_en) blocks.push(`<div class="md">${Markdown.render(String(ai.summary_en))}</div>`);
+      if (zh && ai.summary_zh) blocks.push(`<div class="md" lang="zh-CN">${Markdown.render(String(ai.summary_zh))}</div>`);
+      if (blocks.length) out.push(`<section class="pr-sec"><h2>${L("Summary", "病情摘要")}</h2>${blocks.join(both ? '<hr class="pr-hr">' : "")}<p class="pr-note">${L("Written with AI from the data below – please verify.", "根据下列数据由AI撰写，请核实。")}</p></section>`);
+      const qs = [];
+      if (en && Array.isArray(ai.questions_en)) qs.push(`<ol class="pr-list">${ai.questions_en.map(q => `<li>${esc(q)}</li>`).join("")}</ol>`);
+      if (zh && Array.isArray(ai.questions_zh)) qs.push(`<ol class="pr-list" lang="zh-CN">${ai.questions_zh.map(q => `<li>${esc(q)}</li>`).join("")}</ol>`);
+      if (qs.length) out.push(`<section class="pr-sec"><h2>${L("Questions I'd like to discuss", "我想咨询的问题")}</h2>${qs.join("")}</section>`);
+    }
+
+    // conditions and medication – always included for safety
+    const cond = m.conds.map(c => N(c.en, c.zh)).concat(m.profile.conditionsText ? [T(m.profile.conditionsText)] : []);
+    out.push(`<section class="pr-sec"><h2>${L("Conditions, medication, allergies", "既往病史、用药与过敏")}</h2>
+      <table class="pr-table"><tbody>
+        <tr><th>${L("Conditions", "既往病史")}</th><td>${cond.length ? cond.join("<br>") : L("none entered", "无记录")}</td></tr>
+        <tr><th>${L("Medication", "用药")}</th><td>${m.meds.length ? m.meds.map(x => `${esc(x.name)}${x.dose ? " " + esc(x.dose) : ""}${x.slot ? " – " + L(U.slotPhrase(x.slot), SLOT_ZH[x.slot] || "") : ""}`).join("<br>") : L("none", "无")}</td></tr>
+        <tr><th>${L("Allergies", "过敏史")}</th><td>${m.profile.allergies ? T(m.profile.allergies) : L("none entered", "无记录")}</td></tr>
+      </tbody></table></section>`);
+
+    // lab results
+    if (!m.t.noLabs) {
+      const groups = {};
+      m.rows.forEach(r => { const c = r.h.marker ? r.h.marker.cat : "Other values"; (groups[c] = groups[c] || []).push(r); });
+      const cats = KB.markerCategories.concat(["Other values"]).filter(c => groups[c]);
+      let anyApp = false, anyOlder = false;
+      const tables = cats.map(c => {
+        const rows = groups[c];
+        const dates = Array.from(new Set(rows.reduce((a, r) => a.concat(r.ents.map(e => e.date)), []))).sort();
+        if (dates.length > 4) anyOlder = true;
+        const cols = dates.slice(-4);
+        const body = rows.map(r => {
+          const h = r.h, mk = h.marker, last = r.ents[r.ents.length - 1];
+          const unit = last.unit || (mk ? mk.unit : "");
+          let ref = "";
+          const lo = String(last.item.refLow || "").trim(), hi = String(last.item.refHigh || "").trim();
+          if (lo || hi) ref = lo && hi ? `${lo}–${hi}` : hi ? `≤ ${hi}` : `≥ ${lo}`;
+          else if (mk) {
+            const rr = mk.unitRef && Object.keys(mk.unitRef).find(k => Engine.sameUnit(k, unit)) ? mk.unitRef[Object.keys(mk.unitRef).find(k => Engine.sameUnit(k, unit))] : Engine.refFor(mk, sexKey);
+            if (rr) {
+              const conv = v => (v == null ? null : mk.unitRef && Object.keys(mk.unitRef).some(k => Engine.sameUnit(k, unit)) ? v : Engine.fromCanon(mk, v, unit));
+              const a = conv(rr[0]), b = conv(rr[1]);
+              if ((rr[0] == null || a != null) && (rr[1] == null || b != null)) { ref = (a != null && b != null ? `${U.fmt(a)}–${U.fmt(b)}` : b != null ? `≤ ${U.fmt(b)}` : `≥ ${U.fmt(a)}`) + "*"; anyApp = true; }
+            }
+          }
+          const cells = cols.map(d => {
+            const e = r.ents.filter(x => x.date === d).pop();
+            if (!e) return `<td class="v">–</td>`;
+            const flag = e.level === "critHigh" ? "↑↑" : e.level === "high" ? "↑" : e.level === "critLow" ? "↓↓" : e.level === "low" ? "↓" : "";
+            const u = e.unit && !Engine.sameUnit(e.unit, unit) ? " " + esc(e.unit) : "";
+            return `<td class="v${flag ? " flag" : ""}">${esc(e.item.value)}${u}${flag ? " " + flag : ""}</td>`;
+          }).join("");
+          return `<tr><td>${N(h.name, markerZh(mk))}</td><td class="v">${esc(unit)}</td><td class="v">${esc(ref)}</td>${cells}</tr>`;
+        }).join("");
+        return `<h3>${L(c, CAT_ZH[c] || c)}</h3><div class="pr-wrap"><table class="pr-table"><thead><tr><th>${L("Test", "项目")}</th><th>${L("Unit", "单位")}</th><th>${L("Reference", "参考范围")}</th>${cols.map(d => `<th class="v">${d}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
+      }).join("");
+      const notes = [];
+      if (m.rows.length) notes.push(L("↑ / ↓ = above / below the reference range.", "↑ / ↓ = 高于 / 低于参考范围。"));
+      if (anyApp) notes.push(L("* General reference range (the lab gave none).", "* 通用参考范围（化验单未提供）。"));
+      if (anyOlder) notes.push(L("Showing the latest 4 test dates per group.", "每组仅显示最近4次检测。"));
+      const ctx = m.contexts.length ? `<h3>${L("Context of the tests", "检测时的情况")}</h3><ul class="pr-list">${m.contexts.map(c => `<li><strong>${esc(c.date)}</strong>${c.source ? " (" + esc(c.source) + ")" : ""}: ${T(c.text)}</li>`).join("")}</ul>` : "";
+      out.push(`<section class="pr-sec"><h2>${L("Lab results", "化验结果")}</h2>${m.rows.length ? tables : `<p>${L("No lab values in this period.", "此期间无化验数据。")}</p>`}${notes.length ? `<p class="pr-note">${notes.join(" ")}</p>` : ""}${ctx}</section>`);
+    }
+
+    // examinations
+    if (m.exams.length) {
+      out.push(`<section class="pr-sec"><h2>${L("Examinations", "检查")}</h2><div class="pr-wrap"><table class="pr-table"><thead><tr>
+        <th>${L("Date", "日期")}</th><th>${L("Examination", "检查项目")}</th><th>${L("Result", "结果")}</th><th>${L("Findings and recommendations", "所见与建议")}</th><th>${L("Next", "下次检查")}</th></tr></thead><tbody>
+        ${m.exams.map(e => {
+          const r = RESULT[e.result] || RESULT.normal;
+          const name = e.type === "Other" ? T(e.customType || "Other") : N(e.type, EXAM_ZH[e.type]);
+          return `<tr><td class="v">${esc(e.date || "")}</td><td>${name}</td><td>${L(r[0], r[1])}</td><td>${T(e.summary)}${e.notes ? `<div class="pr-note">${L("Context", "背景")}: ${T(e.notes)}</div>` : ""}</td><td class="v">${esc(e.nextDue || "–")}</td></tr>`;
+        }).join("")}</tbody></table></div></section>`);
+    }
+
+    // home blood pressure
+    if (m.bp) {
+      const a = (x, e, z) => (x ? `<tr><th>${L(e, z)}</th><td class="v">${Math.round(x.sys)}/${Math.round(x.dia)} mmHg${x.pulse ? `, ${L("pulse", "脉搏")} ${Math.round(x.pulse)}` : ""} (${x.n} ${L(x.n === 1 ? "reading" : "readings", "次")})</td></tr>` : "");
+      const recent = m.bp.list.slice(-14).reverse();
+      out.push(`<section class="pr-sec"><h2>${L("Blood pressure measured at home", "家庭自测血压")}</h2>
+        <table class="pr-table pr-narrow"><tbody>${a(m.bp.avg7, "Average, last 7 days", "近7天平均")}${a(m.bp.avg30, "Average, last 30 days", "近30天平均")}</tbody></table>
+        ${opts.bpChart ? opts.bpChart(m.bp.list) : ""}
+        <p class="pr-legend"><span class="k-sys">${L("Systolic", "收缩压")}</span> <span class="k-dia">${L("Diastolic", "舒张压")}</span> <span class="k-th">${L("Home limit 135/85 mmHg", "家庭血压诊断阈值 135/85 mmHg")}</span></p>
+        <div class="pr-wrap"><table class="pr-table"><thead><tr><th>${L("Date and time", "日期时间")}</th><th>mmHg</th><th>${L("Pulse", "脉搏")}</th><th>${L("Note", "备注")}</th></tr></thead><tbody>
+        ${recent.map(x => `<tr><td class="v">${iso(x.t)} ${String(x.t.getHours()).padStart(2, "0")}:${String(x.t.getMinutes()).padStart(2, "0")}</td><td class="v">${x.sys}/${x.dia}</td><td class="v">${x.pulse || "–"}</td><td>${T(x.r.note)}</td></tr>`).join("")}
+        </tbody></table></div></section>`);
+    }
+
+    // supplements
+    if (m.supps.length) {
+      out.push(`<section class="pr-sec"><h2>${L("Supplements I take", "正在服用的保健品/补充剂")}</h2><div class="pr-wrap"><table class="pr-table"><thead><tr>
+        <th>${L("Product", "产品")}</th><th>${L("Contents per day", "每日含量")}</th><th>${L("When", "服用时间")}</th><th>${L("Since", "开始日期")}</th><th>${L("Purpose", "目的")}</th></tr></thead><tbody>
+        ${m.supps.map(s => {
+          const k = U.servings(s);
+          const ing = (s.ingredients || []).filter(i => String(i.name || "").trim()).map(i => {
+            const n = Engine.matchNutrient(i.name), amt = U.parseNum(i.amount);
+            const nm = n ? (both ? esc(n.name) + (nutrientZh(n) ? " / " + esc(nutrientZh(n)) : "") : zh ? esc(nutrientZh(n) || n.name) : esc(n.name)) : esc(i.name);
+            return `${nm}${amt != null ? " " + U.fmt(amt * k) + " " + esc(i.unit || "") : ""}`;
+          }).join("<br>");
+          const when = (s.slots || []).map(sl => L((KB.slots.find(x => x.id === sl) || { label: sl }).label, SLOT_ZH[sl] || sl)).join(", ");
+          return `<tr><td><strong>${esc(U.suppName(s))}</strong>${s.brand ? `<div class="pr-note">${esc(s.brand)}</div>` : ""}</td><td>${ing || "–"}</td><td>${when || "–"}</td><td class="v">${esc(s.startDate || "–")}</td><td>${T(s.purpose)}</td></tr>`;
+        }).join("")}</tbody></table></div></section>`);
+    }
+
+    // automatic checks
+    if (m.findings.length) {
+      out.push(`<section class="pr-sec"><h2>${L("Points flagged by the app", "应用自动提示")}</h2><ul class="pr-list pr-findings">
+        ${m.findings.map(f => `<li><span class="pr-sev">${L(SEV[f.sev][0], SEV[f.sev][1])}</span> <strong>${T(f.title)}</strong><div>${T(f.text)}</div></li>`).join("")}
+        </ul><p class="pr-note">${L("Generated automatically from rules about supplements, medication and lab values – not a medical assessment.", "根据保健品、用药与化验规则自动生成，不构成医学评估。")}</p></section>`);
+    }
+
+    out.push(`<footer class="pr-foot">${en ? `<p>Compiled by the patient with the app Dose on ${today}. Lab values were transcribed from the original reports, partly with AI – please check against the originals. The automatic checks and AI texts are not a medical assessment.</p>` : ""}${zh ? `<p lang="zh-CN">本摘要由患者使用Dose应用于${today}整理。化验数值转录自原始报告（部分借助AI），请以原始报告为准。自动提示及AI生成内容不构成医学评估。</p>` : ""}</footer>`);
+    return `<article class="pr-doc" lang="${zh && !en ? "zh-CN" : "en"}">${out.join("\n")}</article>`;
+  }
+
+  window.DoctorReport = { TOPICS, topicOf, prepare, render };
 })();
 
 </script>
@@ -3397,7 +3765,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
   const UL_SHORT = { UL: "Upper limit", safe: "Safe level", guide: "Guide" };
   const STATUS = { urgent: "See doctor soon", overdue: "Overdue", due: "Due now", soon: "Coming up", planned: "Planned" };
   const RESULT = { normal: "No findings", finding: "Findings", followup: "Follow-up needed" };
-  const S = { route: "today", sheet: null, busy: null, aiError: null, openReport: null, askDraft: "", extraCtx: "", fuDraft: {}, fuBusy: null, fuError: null, driveBusy: null, driveSummary: null, saveTimer: null, pvTimer: null,
+  const S = { route: "today", sheet: null, busy: null, aiError: null, openReport: null, askDraft: "", extraCtx: "", reportOpts: null, lastReportHtml: "", fuDraft: {}, fuBusy: null, fuError: null, driveBusy: null, driveSummary: null, saveTimer: null, pvTimer: null,
     introPlayed: false, lastFocus: null, sched: [] };
 
   const ICON = {
@@ -3410,6 +3778,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg>',
     plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M9.5 12h6M9.5 15h6M9.5 18h4"/></svg>',
     drive: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 4h7l5.5 9.5-3.5 6H6.5L3 13.5z"/><path d="M8.5 4l5.5 9.5H3M15.5 4L10 13.5M14 13.5l3.5 6"/></svg>',
     calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></svg>'
   };
@@ -3687,7 +4056,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
     const labFindings = res.findings.filter(f => f.tag === "Results" || f.tag === "Blood pressure");
     const hist = res.labs;
     const head = `<header class="page-head"><div><h1>Results</h1><p class="lead">Lab values, examinations and the check-ups that are due next.</p></div>
-      <div class="head-actions"><button class="btn primary" data-action="new-panel">${ICON.plus}<span>Lab results</span></button><button class="btn" data-action="new-exam">${ICON.plus}<span>Examination</span></button>${Drive.configured() ? `<button class="btn" data-action="drive-import"${S.driveBusy ? " disabled" : ""}>${ICON.drive}<span>From Drive</span></button>` : ""}</div></header>`;
+      <div class="head-actions"><button class="btn primary" data-action="new-panel">${ICON.plus}<span>Lab results</span></button><button class="btn" data-action="new-exam">${ICON.plus}<span>Examination</span></button>${Drive.configured() ? `<button class="btn" data-action="drive-import"${S.driveBusy ? " disabled" : ""}>${ICON.drive}<span>From Drive</span></button>` : ""}<button class="btn" data-action="doctor-report">${ICON.doc}<span>Doctor report</span></button></div></header>`;
     const missing = [];
     if (sched.missingAge) missing.push("year of birth");
     if (sched.missingSex) missing.push("sex");
@@ -3767,6 +4136,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
     if (existing) draft = JSON.parse(JSON.stringify(existing));
     else if (kind === "supp") draft = { id: Store.uid(), brand: "", product: "", form: "Capsule", serving: "1 capsule", servingsPerDay: "1", slots: [], ingredients: [emptyIng()], purpose: "", startDate: todayLocal(), durationWeeks: "", status: "active", notes: "" };
     else if (kind === "panel") draft = { id: Store.uid(), date: todayLocal(), source: "", notes: "", items: [emptyLabItem(), emptyLabItem(), emptyLabItem()] };
+    else if (kind === "doctor") draft = Object.assign({ topic: "overview", custom: "", lang: "both", period: "24", ai: AI.hasKey(), supps: true, bp: true, checks: true }, S.reportOpts || {});
     else if (kind === "bp") draft = { id: Store.uid(), at: localDT(new Date()), sys: "", dia: "", pulse: "", note: "", files: [] };
     else draft = { id: Store.uid(), date: todayLocal(), type: "General check-up", customType: "", result: "normal", summary: "", nextDue: "", notes: "", files: [] };
     if (kind !== "supp" && !Array.isArray(draft.files)) draft.files = [];
@@ -3782,7 +4152,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
   }
   async function closeSheet(force) {
     if (!S.sheet) return;
-    if (!force && JSON.stringify(S.sheet.draft) !== S.sheet.orig) {
+    if (!force && S.sheet.kind !== "doctor" && JSON.stringify(S.sheet.draft) !== S.sheet.orig) {
       const ok = await confirmBox("Discard changes?", "You have unsaved changes.", "Discard", true);
       if (!ok) return;
     }
@@ -3793,7 +4163,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
   }
   function renderSheet() {
     const sh = S.sheet;
-    const titles = { supp: ["New supplement", "Edit supplement"], panel: ["New lab results", "Edit lab results"], exam: ["New examination", "Edit examination"], bp: ["New blood pressure reading", "Edit reading"] };
+    const titles = { supp: ["New supplement", "Edit supplement"], panel: ["New lab results", "Edit lab results"], exam: ["New examination", "Edit examination"], bp: ["New blood pressure reading", "Edit reading"], doctor: ["Report for your doctor", "Report for your doctor"] };
     $("#sheet-root").innerHTML = `<div class="backdrop" data-action="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">
       <header class="sheet-head"><h2 id="sh-title">${titles[sh.kind][sh.isNew ? 0 : 1]}</h2>
         <button class="icon-btn" data-action="close-sheet" aria-label="Close">${ICON.close}</button></header>
@@ -3802,10 +4172,10 @@ Take this into account. If it changes your earlier assessment, say exactly what 
         ${sh.isNew ? "" : `<button class="btn danger-ghost" data-action="delete-sheet">Delete</button>`}
         <span class="spacer"></span>
         ${sh.kind === "supp" ? `<button class="btn" data-action="ai-check"${AI.hasKey() ? "" : ' disabled title="Set up the AI under Settings first"'}>Check with AI</button>` : ""}
-        <button class="btn primary" data-action="save-sheet">Save</button>
+        ${sh.kind === "doctor" ? `<button class="btn primary" data-action="doctor-create"${sh.reportBusy ? " disabled" : ""}>Create report</button>` : `<button class="btn primary" data-action="save-sheet">Save</button>`}
       </footer></div></div>`;
   }
-  function sheetBody() { const k = S.sheet.kind; return k === "supp" ? suppBody() : k === "panel" ? panelBody() : k === "bp" ? bpBody() : examBody(); }
+  function sheetBody() { const k = S.sheet.kind; return k === "supp" ? suppBody() : k === "panel" ? panelBody() : k === "bp" ? bpBody() : k === "doctor" ? doctorBody() : examBody(); }
   function rerenderBody() { const b = $("#sh-body"); if (b) { b.innerHTML = sheetBody(); hydrateThumbs(b); } }
 
   function scanBox(label, accept, hint) {
@@ -4060,6 +4430,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
       }
     } else if (sh.kind === "exam" && path === "type") rerenderBody();
     else if (sh.kind === "bp") { const b = $("#bp-info"); if (b) b.innerHTML = bpInfo(sh.draft); }
+    else if (sh.kind === "doctor" && (path === "topic" || path === "lang")) rerenderBody();
   }
   function saveSheet() {
     const sh = S.sheet, d = sh.draft;
@@ -4352,6 +4723,62 @@ Take this into account. If it changes your earlier assessment, say exactly what 
     }
   }
 
+  // ----- report for the doctor -----
+  function doctorBody() {
+    const sh = S.sheet, d = sh.draft, ai = AI.hasKey();
+    const chk = (k, label, dis) => `<label class="check"><input type="checkbox" data-dopt="${k}"${d[k] && !dis ? " checked" : ""}${dis ? " disabled" : ""}> ${esc(label)}</label>`;
+    return `<p class="hint">Creates a clear summary of your data that you can save as a PDF and show your doctor – in English, Chinese or both.</p>
+      <label class="field"><span>Topic</span><select data-dbind="topic">${DoctorReport.TOPICS.map(t => opt(t.id, t.en + " – " + t.zh, d.topic)).join("")}</select></label>
+      ${d.topic === "custom" ? `<label class="field"><span>Your topic</span><input data-dbind="custom" value="${esc(d.custom)}" placeholder="e.g. tiredness and hair loss"></label>` : ""}
+      <div class="grid2">
+        <label class="field"><span>Language</span><select data-dbind="lang">${opt("both", "English + 中文", d.lang)}${opt("zh", "中文", d.lang)}${opt("en", "English", d.lang)}</select></label>
+        <label class="field"><span>Period</span><select data-dbind="period">${opt("12", "Last 12 months", d.period)}${opt("24", "Last 2 years", d.period)}${opt("all", "Everything", d.period)}</select></label>
+      </div>
+      <fieldset class="group"><legend>Include</legend>
+        ${chk("ai", "Summary and questions for the doctor, written by the AI", !ai)}
+        ${chk("supps", "Supplements")}${chk("bp", "Home blood pressure")}${chk("checks", "Points flagged by the app (interactions, limits)")}
+        <p class="hint">Conditions, medication and allergies are always included.</p>
+      </fieldset>
+      <label class="field"><span>Name on the report (optional)</span><input data-bind="profile.name" value="${esc(Store.data.profile.name || "")}" autocomplete="name"></label>
+      ${!ai && d.lang !== "en" ? `<p class="hint">Without an AI provider, headings and medical terms are in Chinese, but your own notes stay in English.</p>` : ""}
+      ${sh.reportBusy ? `<div class="ai-busy" role="status"><span class="spinner"></span>Writing${d.lang !== "en" ? " and translating" : ""} … usually under a minute.</div>` : ""}
+      ${sh.reportError ? `<p class="error">${esc(sh.reportError)}</p>` : ""}
+      ${S.lastReportHtml ? `<p class="small"><button class="linklike" data-action="reopen-report">Open the last report again</button></p>` : ""}`;
+  }
+  async function createDoctorReport() {
+    const sh = S.sheet;
+    if (!sh || sh.reportBusy) return;
+    const o = Object.assign({}, sh.draft);
+    delete o.files;
+    if (!AI.hasKey()) o.ai = false;
+    S.reportOpts = o;
+    const langs = o.lang === "both" ? ["en", "zh"] : [o.lang];
+    const model = DoctorReport.prepare(Store.data, o);
+    const t = DoctorReport.topicOf(o.topic);
+    const focus = o.topic === "custom" ? String(o.custom || "").trim() : o.topic === "overview" ? "" : t.en;
+    const strings = langs.includes("zh") ? model.strings : [];
+    let ai = null;
+    if (AI.hasKey() && (o.ai || strings.length)) {
+      sh.reportBusy = true; sh.reportError = null; renderSheet();
+      try { ai = await AI.doctorReport(Store.data, { focus, summary: !!o.ai, langs, strings, period: model.periodText }); }
+      catch (e) { sh.reportBusy = false; sh.reportError = e.message; if (S.sheet === sh) renderSheet(); return; }
+      sh.reportBusy = false;
+    }
+    if (S.sheet !== sh) return;
+    S.lastReportHtml = DoctorReport.render(model, ai, { langs, bpChart, summary: !!o.ai });
+    await closeSheet(true);
+    openPrint(S.lastReportHtml);
+  }
+  function openPrint(html) {
+    const root = $("#print-root");
+    root.innerHTML = `<div class="pr-toolbar"><button class="btn primary" data-action="print-report">${ICON.doc}<span>Save as PDF</span></button>
+      <span class="spacer"></span><button class="btn" data-action="close-print">Close</button>
+      <p class="hint">In the print dialog choose “Save as PDF” – then you can send or show the file.</p></div>${html}`;
+    document.body.classList.add("printing", "noscroll");
+    root.scrollTop = 0;
+  }
+  function closePrint() { document.body.classList.remove("printing", "noscroll"); $("#print-root").innerHTML = ""; }
+
   // ----- files (photos, PDFs) -----
   function allFileRefs() {
     const s = new Set(), d = Store.data;
@@ -4603,6 +5030,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
       <span class="save-state" id="save-state" aria-live="polite"></span></header>
       <section class="block form-block"><h2>About you</h2>
         <div class="grid4">
+          <label class="field"><span>Name (for reports)</span><input data-bind="profile.name" value="${esc(p.name)}" autocomplete="name"></label>
           <label class="field"><span>Year of birth</span><input data-bind="profile.birthYear" inputmode="numeric" value="${esc(p.birthYear)}" placeholder="e.g. 1988"></label>
           <label class="field"><span>Sex</span><select data-bind="profile.sex">${opt("", "–", p.sex)}${opt("female", "female", p.sex)}${opt("male", "male", p.sex)}${opt("other", "other", p.sex)}</select></label>
           <label class="field"><span>Height in cm</span><input data-bind="profile.heightCm" inputmode="numeric" value="${esc(p.heightCm)}"></label>
@@ -4924,6 +5352,11 @@ Take this into account. If it changes your earlier assessment, say exactly what 
       case "drive-test": driveTest(el); break;
       case "drive-dismiss": S.driveSummary = null; { const ds = $("#drive-status"); if (ds) ds.innerHTML = ""; } break;
       case "report-followup": runFollowup(el.dataset.id); break;
+      case "doctor-report": openSheet("doctor", null); break;
+      case "doctor-create": createDoctorReport(); break;
+      case "reopen-report": if (S.lastReportHtml) { await closeSheet(true); openPrint(S.lastReportHtml); } break;
+      case "print-report": window.print(); break;
+      case "close-print": closePrint(); break;
       case "custom-del": {
         if (!(await confirmBox("Remove ingredient?", "It's removed from your database. Supplements that contain it keep the entry, but it's no longer checked.", "Remove", true))) return;
         Store.data.customNutrients = Store.data.customNutrients.filter(c => c.id !== el.dataset.id);
@@ -5028,6 +5461,8 @@ Take this into account. If it changes your earlier assessment, say exactly what 
       S.askDraft = el.value;
     } else if (el.matches("[data-scan]")) {
       const fs = Array.from(el.files || []); el.value = ""; scanFiles(fs);
+    } else if (el.dataset.dopt && S.sheet) {
+      S.sheet.draft[el.dataset.dopt] = el.checked;
     } else if (el.matches("[data-attach]")) {
       const fs = Array.from(el.files || []); el.value = ""; attachFiles(fs);
     } else if (el.matches("[data-keepscan]")) {
@@ -5042,6 +5477,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
   document.addEventListener("change", onField);
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
+    if (document.body.classList.contains("printing")) { closePrint(); return; }
     if ($("#viewer-root").innerHTML) { $("#viewer-root").innerHTML = ""; return; }
     if (S.sheet && !$("#modal-root").innerHTML) { e.preventDefault(); closeSheet(false); }
   });
@@ -5062,6 +5498,7 @@ Take this into account. If it changes your earlier assessment, say exactly what 
       <datalist id="labunit-list">${units.map(u => `<option value="${esc(u)}"></option>`).join("")}</datalist>`;
     document.body.appendChild(dl);
     const vr = document.createElement("div"); vr.id = "viewer-root"; document.body.appendChild(vr);
+    const pr = document.createElement("div"); pr.id = "print-root"; document.body.appendChild(pr);
     $("#nav").innerHTML = navHtml();
     render();
     Attach.gc(allFileRefs()).catch(() => {});
