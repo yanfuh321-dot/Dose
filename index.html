@@ -4189,6 +4189,27 @@ ${list}` : ""}` }],
     exam: { key: "exams", name: e => `${examName(e)} of ${U.fmtDate(e.date)}`, text: () => "This examination and any attached files will be removed." },
     bp: { key: "bp", name: r => { const t = new Date(String(r.at || "")); return `reading of ${isNaN(t) ? "unknown time" : fmtDT(t)} (${U.parseNum(r.sys)}/${U.parseNum(r.dia)} mmHg)`; }, text: () => "This blood pressure reading will be removed." }
   };
+  // Drive remembers which files it already read; forgetting the ones behind deleted
+  // entries means the import offers them again instead of saying "no new files"
+  function forgetDriveDone(ids) {
+    const done = Store.data.driveDone;
+    if (!done || !ids || !ids.length) return 0;
+    const set = new Set(ids);
+    let n = 0;
+    Object.keys(done).forEach(k => {
+      const e = done[k] || {}, ids0 = e.ids || {};
+      if (set.has(ids0.lab) || set.has(ids0.exam) || set.has(ids0.both)) { delete done[k]; n++; }
+    });
+    return n;
+  }
+  // entries marked by kind, for when a whole section is cleared (also covers older entries without ids)
+  function forgetDriveDoneByKind(kinds) {
+    const done = Store.data.driveDone;
+    if (!done) return 0;
+    let n = 0;
+    Object.keys(done).forEach(k => { if (kinds.includes(String((done[k] || {}).kind))) { delete done[k]; n++; } });
+    return n;
+  }
   function removeRecords(kind, ids) {
     const def = RECORDS[kind];
     if (!def || !ids.length) return 0;
@@ -4196,6 +4217,7 @@ ${list}` : ""}` }],
     if (!gone.length) return 0;
     Store.data[def.key] = list.filter(x => !set.has(x.id));
     dropFiles(gone.reduce((a, x) => a.concat((x.files || []).map(f => f.id)), []));
+    if (kind === "panel" || kind === "exam") forgetDriveDone(gone.map(x => x.id));
     return gone.length;
   }
   async function deleteRecord(kind, id) {
@@ -4268,9 +4290,14 @@ ${list}` : ""}` }],
       else n += removeRecords(s.kind, (Store.data[RECORDS[s.kind].key] || []).map(x => x.id));
     });
     if (!n) return;
+    // whole sections go: also forget files that Drive marked as already read, so they can be imported again
+    const kinds = [];
+    if (picked.keys.includes("labs")) kinds.push("lab", "both", "dup");
+    if (picked.keys.includes("exams")) kinds.push("exam", "both", "dup");
+    const forgotten = forgetDriveDoneByKind(kinds);
     if (picked.backup) download(`dose-backup-before-clear-${todayLocal()}.json`, "application/json", snap);
     Store.save();
-    toast(`${n} ${n === 1 ? "entry" : "entries"} deleted`);
+    toast(`${n} ${n === 1 ? "entry" : "entries"} deleted` + (forgotten ? " – Drive can import them again" : ""));
     render();
   }
 
@@ -4809,6 +4836,7 @@ ${list}` : ""}` }],
     const key = sh.kind === "supp" ? "supplements" : sh.kind === "panel" ? "labs" : sh.kind === "bp" ? "bp" : "exams";
     Store.data[key] = Store.data[key].filter(x => x.id !== sh.draft.id);
     dropFiles((sh.draft.files || []).map(f => f.id).concat((JSON.parse(sh.orig).files || []).map(f => f.id)));
+    if (key === "labs" || key === "exams") forgetDriveDone([sh.draft.id]);
     Store.save();
     closeSheet(true);
     toast("Deleted");
@@ -4969,40 +4997,49 @@ ${list}` : ""}` }],
       .map(i => ({ id: Store.uid(), name: String(i.name), value: String(i.value), unit: i.unit ? String(i.unit) : "", refLow: i.refLow != null ? String(i.refLow) : "", refHigh: i.refHigh != null ? String(i.refHigh) : "" }));
     const ex = r && r.exam && String(r.exam.summary || "").trim() ? r.exam : null;
     const dup = items.length && isDuplicatePanel(date, items);
-    if ((!items.length || dup) && !ex) return items.length ? "dup" : "other";
-    const meta = await storeFile(original.file, original.dataUrl);
+    if ((!items.length || dup) && !ex) return { kind: items.length ? "dup" : "other", ids: {} };
+    const meta = await storeFile(original.file, original.dataUrl), ids = {};
     let kind = dup ? "dup" : "";
-    if (items.length && !dup) { Store.data.labs.push({ id: Store.uid(), date, source: source || "Google Drive", notes: "", items, files: [meta], review: true }); kind = "lab"; }
+    if (items.length && !dup) { ids.lab = Store.uid(); Store.data.labs.push({ id: ids.lab, date, source: source || "Google Drive", notes: "", items, files: [meta], review: true }); kind = "lab"; }
     if (ex) {
       const type = KB.examTypes.includes(ex.type) ? ex.type : "Other";
-      Store.data.exams.push({ id: Store.uid(), date, type, customType: type === "Other" ? String(ex.type || "Examination").slice(0, 60) : "",
+      ids.exam = Store.uid();
+      Store.data.exams.push({ id: ids.exam, date, type, customType: type === "Other" ? String(ex.type || "Examination").slice(0, 60) : "",
         result: ["normal", "finding", "followup"].includes(ex.result) ? ex.result : "finding", summary: String(ex.summary).slice(0, 1200),
         nextDue: /^\d{4}-\d{2}-\d{2}$/.test(ex.nextDue || "") ? ex.nextDue : "", notes: "", files: [meta], review: true });
       kind = kind === "lab" ? "both" : "exam";
     }
-    return kind;
+    return { kind, ids };
   }
-  async function importDrive() {
+  async function importDrive(opts) {
     if (S.driveBusy) return;
     if (!AI.hasKey()) { toast("Set up the AI under Settings first.", "error"); return; }
+    const skipAsk = !!(opts && opts.skipAsk);
     const tokenP = Drive.getToken(); // first, so the sign-in window isn't blocked
     S.driveSummary = null;
     setDriveBusy("Connecting to Google Drive …");
     const out = { lab: 0, exam: 0, dup: 0, other: 0, failed: [] };
-    let fresh = [], listing = null;
+    let fresh = [], listing = null, done = Store.data.driveDone || {};
     try {
       await tokenP;
       setDriveBusy("Looking for new files …");
       listing = await Drive.listAll();
-      const done = Store.data.driveDone || {};
       fresh = listing.files.filter(f => !done[f.id] || done[f.id].t !== f.modifiedTime);
     } catch (e) { S.driveBusy = null; render(); toast(e.message, "error"); return; }
     S.driveBusy = null;
-    if (!fresh.length) { S.driveSummary = `No new files in your Drive folder (${listing.files.length} already imported).`; render(); return; }
+    if (!fresh.length) {
+      S.driveSummary = `No new files in your Drive folder (${listing.files.length} already imported).`
+        + (Object.keys(done).length ? ` Deleted something and want it back? <button class="linklike small" data-action="drive-reset" data-again="1">forget what Dose has already read</button> and offer every file again.` : "");
+      render();
+      return;
+    }
     render();
-    const ok = await confirmBox(`${fresh.length} new ${fresh.length === 1 ? "file" : "files"} in Google Drive`,
-      `Dose reads ${fresh.length === 1 ? "it" : "them"} with ${AI.providerName()} – one AI request per file – and adds lab values and examinations. You can check and correct everything afterwards.`, `Import ${fresh.length}`);
-    if (!ok) return;
+    // coming from "forget what Dose has already read", the wish to import again is already explicit
+    if (!skipAsk) {
+      const ok = await confirmBox(`${fresh.length} new ${fresh.length === 1 ? "file" : "files"} in Google Drive`,
+        `Dose reads ${fresh.length === 1 ? "it" : "them"} with ${AI.providerName()} – one AI request per file – and adds lab values and examinations. You can check and correct everything afterwards.`, `Import ${fresh.length}`);
+      if (!ok) return;
+    }
     for (let k = 0; k < fresh.length; k++) {
       const f = fresh[k];
       setDriveBusy(`Reading ${k + 1} of ${fresh.length}: ${f.path || f.name}`);
@@ -5010,9 +5047,10 @@ ${list}` : ""}` }],
         const file = await Drive.download(f);
         const conv = await filesToImages([file], 2200);
         const r = await AI.readDocument(conv.aiUrls);
-        const kind = await addFromDocument(r, f, conv.originals[0]);
+        const added = await addFromDocument(r, f, conv.originals[0]);
+        const kind = added.kind;
         if (kind === "both") { out.lab++; out.exam++; } else out[kind]++;
-        Store.data.driveDone[f.id] = { t: f.modifiedTime, name: f.name, kind };
+        Store.data.driveDone[f.id] = { t: f.modifiedTime, name: f.name, kind, ids: added.ids };
         Store.save();
       } catch (e) { out.failed.push(`${f.name}: ${e.message}`); }
     }
@@ -5026,6 +5064,19 @@ ${list}` : ""}` }],
       + (listing.skipped.length ? `<p class="small">Skipped (unsupported format, e.g. HEIC or Google Docs): ${esc(listing.skipped.slice(0, 5).join(", "))}${listing.skipped.length > 5 ? " …" : ""}</p>` : "")
       + (out.failed.length ? `<p class="small error-text">Couldn't read: ${esc(out.failed.join("; "))} – they'll be tried again next time.</p>` : "");
     render();
+  }
+  async function driveReset(again) {
+    const n = Object.keys(Store.data.driveDone || {}).length;
+    if (!n) { toast("Nothing has been read from Drive yet."); return; }
+    if (!(await confirmBox("Forget what Dose has read?",
+      `${n} ${n === 1 ? "file is" : "files are"} marked as imported, so Drive says there is nothing new. After this they count as new again${again ? " and the import starts right away" : " the next time you import"}. Nothing that is already in Dose is changed – importing files again can create double entries, which you can remove with “Duplicates”.`,
+      "Forget", true))) return;
+    Store.data.driveDone = {};
+    Store.save();
+    S.driveSummary = null;
+    render();
+    toast("Import history cleared");
+    if (again) importDrive({ skipAsk: true });
   }
   async function driveTest(btn) {
     const outEl = $("#drive-out");
@@ -5542,6 +5593,11 @@ ${list}` : ""}` }],
         <label class="field"><span>Drive folder link</span><input data-sbind="drive.folder" value="${esc(s.drive.folder)}" placeholder="https://drive.google.com/drive/folders/…" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url"></label>
         <p class="hint">In Google Cloud, add this app's address as an authorized JavaScript origin: <strong class="origin">${esc(location.origin)}</strong></p>
         <div class="actions"><button class="btn" data-action="drive-test"${s.drive.clientId && Drive.folderId() ? "" : " disabled"}>Connect and check</button><span id="drive-out" class="small" role="status"></span></div>
+        ${(() => {
+          const n = Object.keys(Store.data.driveDone || {}).length;
+          return n ? `<p class="hint">Dose remembers the ${n} ${n === 1 ? "file" : "files"} it has already read, so an import only offers new ones. Deleted results and want them back? Forget the list – then every file counts as new again.</p>
+          <div class="actions"><button class="btn small danger-ghost" data-action="drive-reset">${ICON.trash}<span>Forget the ${n} read ${n === 1 ? "file" : "files"}</span></button></div>` : "";
+        })()}
       </section>
       <section class="block form-block"><h2>Sync</h2>
         <p class="sync-state s-${st.state}">${syncStateText(st)}</p>
@@ -5693,6 +5749,7 @@ ${list}` : ""}` }],
         break;
       }
       case "drive-import": importDrive(); break;
+      case "drive-reset": await driveReset(!!el.dataset.again); break;
       case "drive-test": driveTest(el); break;
       case "drive-dismiss": S.driveSummary = null; { const ds = $("#drive-status"); if (ds) ds.innerHTML = ""; } break;
       case "report-followup": runFollowup(el.dataset.id); break;
